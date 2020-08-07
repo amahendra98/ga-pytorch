@@ -27,7 +27,7 @@ class DataStore(object):
                                                                    data_dir='./',
                                                                    test_ratio=0.2)
 
-        # Get DataSets into arrays of tuples stored once on desired device (avoids memory intensive pytorch iterators)
+        # Get DataSets into arrays of tuples stored once on a desired device (avoids memory intensive pytorch iterators)
         for i, (geometry, spectra) in enumerate(train_data_loader):
             self.train_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
