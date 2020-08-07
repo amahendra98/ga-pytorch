@@ -5,3 +5,6 @@ Box2D
 numpy
 torch
 torchvision
+pandas
+matplotlib
+scikit-learn

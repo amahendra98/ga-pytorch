@@ -8,13 +8,14 @@ from os.path import join, exists
 import multiprocessing
 import gc
 import copy
+from train import DataStore
 
 from multiprocessing import set_start_method
 set_start_method('forkserver', force=True)
 
 
 class GA:
-    def __init__(self, elite_evals, top, threads, timelimit, pop_size, setting, discrete_VAE):
+    def __init__(self, elite_evals, top, threads, timelimit, pop_size, setting, devices):
         '''
         Constructor. 
         '''
@@ -27,19 +28,35 @@ class GA:
         multi_process = threads>1
 
         self.truncation_threshold = int(pop_size/2)  #Should be dividable by two
+        self.devices = devices
 
         from train import GAIndividual
 
+        pop_tracker = [0]*len(devices)
+        for i in range(pop_size):
+            dev_idx = i%len(devices)
+            dev = devices[dev_idx]
+            pop_tracker[dev_idx] += 1
+
+        # Assign each GAIndividual Model an id, device, and datastore
+        self.datastores = [DataStore(devices[i],pop_tracker[dev_idx]) for i in range(len(devices))]
+
         self.P = []
         for i in range(pop_size):
-            self.P.append(GAIndividual('cpu', timelimit, setting, multi= multi_process, discrete_VAE=discrete_VAE ) )
+            dev_idx = i%len(devices)
+            dev = devices[dev_idx]
+            ident = i/len(devices)
+            self.P.append( GAIndividual(ident, dev, timelimit, setting,self.datastores[dev_idx],
+                                        multi=multi_process) )
+
 
         
     def run(self, max_generations, filename, folder):
 
         Q = []
         
-        max_fitness = -sys.maxsize
+        max_train_fitness = -sys.maxsize
+        max_test_fitness = -sys.maxsize
 
         fitness_file = open(folder+"/fitness_"+filename+".txt", 'a')
 
@@ -60,10 +77,7 @@ class GA:
 
             idx = 0
             for s in pop_tmp:
-                 P[idx].r_gen.vae.load_state_dict ( s['vae'].copy() )
-                 P[idx].r_gen.controller.load_state_dict ( s['controller'].copy() )
-                 P[idx].r_gen.mdrnn.load_state_dict ( s['mdrnn'].copy() )
-
+                 P[idx].r_gen.lorentz.load_state_dict ( s['lorentz'].copy() )
                  i = s['generation'] + 1
                  idx+=1
                  
@@ -76,42 +90,47 @@ class GA:
             print("Generation ", i)
             sys.stdout.flush()
 
-            print("Evaluating individuals: ",len(P) )
+            print("Evaluating individuals on training set: ",len(P) )
             for s in P:  
                 s.run_solution(pool, 1, force_eval=True)
 
-            fitness = []
+            train_fitness = []
+            test_fitness = []
 
             for s in P:
                 s.is_elite = False
-                f, _ = s.evaluate_solution(1)
-                fitness += [f]
+                train_f, test_f = s.evaluate_solution(1)
+                train_fitness += [train_f]
+                test_fitness += [test_f]
 
             self.sort_objective(P)
 
-            max_fitness_gen = -sys.maxsize #keep track of highest fitness this generation
+            max_train_fitness_gen = -sys.maxsize #keep track of highest fitness this generation
+            max_test_fitness_gen = -sys.maxsize
 
-            print("Evaluating elites: ", self.top)
+            print("Evaluating elites on training set: ", self.top)
 
             for k in range(self.top):      
                 P[k].run_solution(pool, self.elite_evals)
             
             for k in range(self.top):
 
-                f, _ = P[k].evaluate_solution(self.elite_evals) 
+                train_f, test_f = P[k].evaluate_solution(self.elite_evals)
 
-                if f>max_fitness_gen:
-                    max_fitness_gen = f
+                if train_f>max_train_fitness_gen:   #All logic and evaluation is done with train data
+                    max_train_fitness_gen = train_f
+                    max_test_fitness_gen = test_f
                     elite = P[k]
 
-                if f > max_fitness: #best fitness ever found
-                    max_fitness = f
-                    print("\tFound new champion ", max_fitness )
+                if train_f > max_train_fitness: #best fitness ever found
+                    max_train_fitness = train_f
+                    max_test_fitness = test_f
+                    print("\tFound new champion! Train fitness: ", max_train_fitness," Test fitness: ", max_test_fitness)
 
                     best_ever = P[k]
                     sys.stdout.flush()
                     
-                    torch.save({'vae': elite.r_gen.vae.state_dict(), 'controller': elite.r_gen.controller.state_dict(), 'mdrnn':elite.r_gen.mdrnn.state_dict(), 'fitness':f}, "{0}/best_{1}G{2}.p".format(folder, filename, i))
+                    torch.save({'lorentz': elite.r_gen.lorentz.state_dict(), 'fitness':train_f}, "{0}/best_{1}G{2}.p".format(folder, filename, i))
 
             elite.is_elite = True  #The best 
 
@@ -121,8 +140,11 @@ class GA:
 
             Q = []
 
+            replaced = []
             if len(P) > self.truncation_threshold-1:
-                del P[self.truncation_threshold-1:]
+                for j in range(len(P)-1,self.truncation_threshold - 2,-1):
+                    tmp = P.pop(j)
+                    replaced.append((tmp.id,tmp.device,tmp.r_gen.dataSource))
 
             P.append(elite) #Maybe it's in there twice now but that's okay
 
@@ -132,7 +154,8 @@ class GA:
                  ind_fitness_file.write( "Gen\t%d\tFitness\t%f\n" % (i, -s.fitness )  )  
                  ind_fitness_file.flush()
 
-                 save_pop += [{'vae': s.r_gen.vae.state_dict(), 'controller': s.r_gen.controller.state_dict(), 'mdrnn':s.r_gen.mdrnn.state_dict(), 'fitness':fitness, 'generation':i}]
+                 save_pop += [{'lorentz': s.r_gen.lorentz.state_dict(), 'train_fitness':train_fitness,
+                               'test_fitness':test_fitness, 'generation':i}]
                  
 
             if (i % 25 == 0):
@@ -141,17 +164,23 @@ class GA:
                 print("done")
 
             print("Creating new population ...", len(P))
-            Q = self.make_new_pop(P)
+            Q = self.make_new_pop(P, replaced)
 
             P.extend(Q)
 
             elapsed_time = time.time() - start_time
 
-            print( "%d\tAverage\t%f\tMax\t%f\tMax ever\t%f\tTime\t%f\n" % (i, np.mean(fitness), max_fitness_gen, max_fitness, elapsed_time) )  # python will convert \n to os.linesep
+            print( "%d\tAverage\t%f\tMax\t%f\tMax ever\t%f\tTime\t%f\n" % (i, np.mean(train_fitness),
+                                                                           max_train_fitness_gen, max_train_fitness,
+                                                                           elapsed_time) )  # python will convert \n to os.linesep
 
-            fitness_file.write( "%d\tAverage\t%f\tMax\t%f\tMax ever\t%f\tTime\t%f\n" % (i, np.mean(fitness), max_fitness_gen, max_fitness,  elapsed_time) )  # python will convert \n to os.linesep
+            fitness_file.write( "%d\tAverage\t%f\tMax\t%f\tMax ever\t%f\tTime\t%f\n" % (i, np.mean(train_fitness),
+                                                                                        max_train_fitness_gen,
+                                                                                        max_train_fitness,
+                                                                                        elapsed_time) )  # python will convert \n to os.linesep
             fitness_file.flush()
-            graphing_file.write("%d, %f, %f, %f\n" % (i, max_fitness_gen, max_fitness, elapsed_time))
+            graphing_file.write("%d,%f,%f,%f,%f,%f,%f,%f\n" % (i, np.mean(train_fitness), np.mean(test_fitness),max_train_fitness_gen,
+                                                      max_test_fitness_gen,max_train_fitness,max_test_fitness, elapsed_time))
             graphing_file.flush()
 
             if (i > max_generations):
@@ -164,16 +193,13 @@ class GA:
         print("Testing best ever: ")
         pool = multiprocessing.Pool(self.threads)
 
-        best_ever.run_solution(pool, 100, early_termination=False, force_eval = True)
-        avg_f, sd = best_ever.evaluate_solution(100)
-        print(avg_f, sd)
+        best_ever.run_solution(pool, 100, force_eval = True)
+        train_f, test_f = best_ever.evaluate_solution(100)
+        print(train_f, test_f)
         
-        fitness_file.write( "Test\t%f\t%f\n" % (avg_f, sd) ) 
-
+        fitness_file.write( "Train fitness\t%f\tTest fitness\t%f\n" % (train_f, test_f) )
         fitness_file.close()
-
         ind_fitness_file.close()
-
         graphing_file.close()
 
                                 
@@ -188,7 +214,7 @@ class GA:
                     P[j] = s1
                     
 
-    def make_new_pop(self, P):
+    def make_new_pop(self, P, replaced):
         '''
         Make new population Q, offspring of P. 
         '''
@@ -196,6 +222,7 @@ class GA:
         
         while len(Q) < self.truncation_threshold:
             selected_solution = None
+            idx = 0
             
             s1 = random.choice(P)
             s2 = s1
@@ -212,11 +239,12 @@ class GA:
             elif s2.is_elite:  
                 selected_solution = s2
 
-            child_solution = selected_solution.clone_individual() 
+            child_solution = selected_solution.clone_individual(replaced[idx])
             child_solution.mutate()
 
             if (not child_solution in Q):    
                 Q.append(child_solution)
+                idx += 1
         
         return Q
         
