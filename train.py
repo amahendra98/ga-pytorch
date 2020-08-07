@@ -9,8 +9,7 @@ import copy
 import random
 
 # Hardcoded for now. Note: Size of latent vector (LSIZE) is increased to 128 for DISCRETE representation
-ASIZE, LSIZE, RSIZE, RED_SIZE, SIZE =\
-    3, 32, 256, 64, 64
+ASIZE, LSIZE, RSIZE, RED_SIZE, SIZE = 3, 32, 256, 64, 64
 
 transform = transforms.Compose([
     transforms.ToPILImage(),
@@ -36,6 +35,7 @@ class RolloutGenerator(object):
         self.discrete_VAE = discrete_VAE
 
         #Because the represenation is discrete, we increase the size of the latent vector
+        LSIZE = 32 #A.M. in response to compiler issues
         if (self.discrete_VAE):
             LSIZE = 128
 

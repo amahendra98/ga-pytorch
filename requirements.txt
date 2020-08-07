@@ -1,4 +1,6 @@
 argparse
-gym[all]
+gym
 box2d
 numpy
+torch
+torchvision
