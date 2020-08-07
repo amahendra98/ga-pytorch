@@ -4,4 +4,3 @@ box2d
 numpy
 torch
 torchvision
-tensorboard

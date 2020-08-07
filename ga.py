@@ -44,6 +44,8 @@ class GA:
         fitness_file = open(folder+"/fitness_"+filename+".txt", 'a')
 
         ind_fitness_file = open(folder+"/individual_fitness_"+filename+".txt", 'a')
+
+        graphing_file = open(folder+"/fitness_"+filename+".csv", 'a')
         
         i = 0
         P = self.P
@@ -149,6 +151,8 @@ class GA:
 
             fitness_file.write( "%d\tAverage\t%f\tMax\t%f\tMax ever\t%f\tTime\t%f\n" % (i, np.mean(fitness), max_fitness_gen, max_fitness,  elapsed_time) )  # python will convert \n to os.linesep
             fitness_file.flush()
+            graphing_file.write("%d, %f, %f, %f\n" % (i, max_fitness_gen, max_fitness, elapsed_time))
+            graphing_file.flush()
 
             if (i > max_generations):
                 break
@@ -169,6 +173,8 @@ class GA:
         fitness_file.close()
 
         ind_fitness_file.close()
+
+        graphing_file.close()
 
                                 
     def sort_objective(self, P):

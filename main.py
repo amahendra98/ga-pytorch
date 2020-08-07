@@ -110,6 +110,10 @@ def main(argv):
 
     ga = GA(args.elite_evals, args.top, args.threads, args.timelimit, args.pop_size, args.setting, args.discrete==1) #mutation rate, crossover rate
 
+    graphing_file = open(args.folder + "/fitness_" + "{0}_{1}_".format(args.setting, args.seed) + ".csv", 'a')
+    graphing_file.write("Generation, max fitness in generation, max fitness, time elapsed for generation\n")
+    graphing_file.close()
+
     ga.run(args.generations, "{0}_{1}_".format(args.setting, args.seed), args.folder ) #pop_size, num_gens
 
 if __name__ == '__main__':
