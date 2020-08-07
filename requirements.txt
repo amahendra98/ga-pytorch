@@ -1,5 +1,6 @@
 argparse
 gym
+gym[box2d]
 box2d
 numpy
 torch
