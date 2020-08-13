@@ -23,10 +23,10 @@ class lorentz_model(nn.Module):
         w_numpy = np.arange(self.freq_low, self.freq_high, (self.freq_high - self.freq_low) / self.num_spec_point)
         self.w = torch.tensor(w_numpy)
         self.linears = nn.ModuleList([])
-        self.bn_linears = nn.ModuleList([])
+        #self.bn_linears = nn.ModuleList([])
         for ind, fc_num in enumerate(self.linear[0:-1]):  # Excluding the last one as we need intervals
             self.linears.append(nn.Linear(fc_num, self.linear[ind + 1], bias=True))
-            self.bn_linears.append(nn.BatchNorm1d(self.linear[ind + 1], track_running_stats=True, affine=True))
+            #self.bn_linears.append(nn.BatchNorm1d(self.linear[ind + 1], track_running_stats=True, affine=True))
 
         self.lin_w0 = nn.Linear(self.linear[-1], self.num_lorentz_osc, bias=False)
         self.lin_wp = nn.Linear(self.linear[-1], self.num_lorentz_osc, bias=False)
@@ -35,12 +35,11 @@ class lorentz_model(nn.Module):
 
     def forward(self, G):
         out = G
-
-        for ind, (fc, bn) in enumerate(zip(self.linears, self.bn_linears)):
+        for ind, fc in enumerate(zip(self.linears)):
             if ind < len(self.linears) - 0:
-                out = F.relu(bn(fc(out)))
+                out = F.relu(fc(out))
             else:
-                out = bn(fc(out))
+                out = fc(out)
 
         w0 = F.relu(self.lin_w0(out).unsqueeze(2))  # size -> [1024,4,1]
         wp = F.relu(self.lin_wp(out).unsqueeze(2))
