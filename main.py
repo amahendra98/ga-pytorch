@@ -22,6 +22,8 @@ def main(argv):
 
     parser = argparse.ArgumentParser()
 
+    parser.add_argument('--num-batches', type=int, help='Number of batches of data', default=1)
+
     parser.add_argument('--pop-size', type=int, help='Population size.', default = 200)
 
     parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -110,13 +112,10 @@ def main(argv):
     if not exists(args.folder):
         mkdir(args.folder)
 
-    ga = GA(args.elite_evals, args.top, args.threads, args.timelimit, args.pop_size, args.setting,devices) #mutation rate, crossover rate
+    ' Create Genetic Algorithm Handler, load parameters '
+    ga = GA(args.elite_evals, args.top, args.threads, args.timelimit, args.pop_size, args.setting,devices,args.num_batches) #mutation rate, crossover rate
 
-    graphing_file = open(args.folder + "/fitness_" + "{0}_{1}_".format(args.setting, args.seed) + ".csv", 'a')
-    graphing_file.write("Generation, avg_train_fit, avg_test_fit, max_train_fit_gen, max_test_fit_gen,"\
-                        "max_train_fit, max_test_fit, time elapsed for gen\n")
-    graphing_file.close()
-
+    ' Run Genetic Algorithm '
     ga.run(args.generations, "{0}_{1}_".format(args.setting, args.seed), args.folder ) #pop_size, num_gens
 
 if __name__ == '__main__':

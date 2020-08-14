@@ -35,7 +35,7 @@ class lorentz_model(nn.Module):
 
     def forward(self, G):
         out = G
-        for ind, fc in enumerate(zip(self.linears)):
+        for ind, fc in enumerate(self.linears):
             if ind < len(self.linears) - 0:
                 out = F.relu(fc(out))
             else:

@@ -15,46 +15,45 @@ set_start_method('forkserver', force=True)
 
 
 class GA:
-    def __init__(self, elite_evals, top, threads, timelimit, pop_size, setting, devices):
+    def __init__(self, elite_evals, top, threads, timelimit, pop_size, setting, devices, num_batches):
         '''
         Constructor. 
         '''
         self.top  = top  #Number of top individuals that should be reevaluated
-        self.elite_evals = elite_evals  #Number of times should the top individuals be evaluated
-
+        self.elite_evals = elite_evals  #Number of times should the top individuals be evaluate
         self.pop_size = pop_size
-
         self.threads = threads
         multi_process = threads>1
-
         self.truncation_threshold = int(pop_size/2)  #Should be dividable by two
         self.devices = devices
 
         from train import GAIndividual
 
-        pop_tracker = [0]*len(devices)
-        for i in range(pop_size):
-            dev_idx = i%len(devices)
-            dev = devices[dev_idx]
-            pop_tracker[dev_idx] += 1
+        ' Calculate population per device '
+        num_dev = len(devices)
 
-        # Assign each GAIndividual Model an id, device, and datastore
-        self.datastores = [DataStore(devices[i],pop_tracker[dev_idx]) for i in range(len(devices))]
+        remainder = pop_size % num_dev
+        common = pop_size / num_dev
+        pop_tracker = [common] * num_dev
+        pop_tracker[0:remainder] += [1]*remainder
 
+        ' Load and datastores into an array, one loaded per device '
+        self.datastores = [DataStore(devices[i],pop_tracker[i],num_batches) for i in range(num_dev)]
+
+        ' Store one GAIndividual (stores a model and handles its training) for each in population '
         self.P = []
         for i in range(pop_size):
-            dev_idx = i%len(devices)
+            dev_idx = i % num_dev
             dev = devices[dev_idx]
-            ident = i/len(devices)
-            self.P.append( GAIndividual(ident, dev, timelimit, setting,self.datastores[dev_idx],
-                                        multi=multi_process) )
-
+            self.P.append( GAIndividual(dev, timelimit, setting, self.datastores[dev_idx],multi=multi_process) )
 
         
     def run(self, max_generations, filename, folder):
+        ' Handles Actual Genetic Algorithm'
 
         Q = []
-        
+
+        ' Assume lowest possible training fitness value '
         max_train_fitness = -sys.maxsize
         max_test_fitness = -sys.maxsize
 
@@ -62,14 +61,17 @@ class GA:
 
         ind_fitness_file = open(folder+"/individual_fitness_"+filename+".txt", 'a')
 
-        graphing_file = open(folder+"/fitness_"+filename+".csv", 'a')
-        
+        ' Setup Graphing File '
+        graphing_file = open(folder + "/fitness_" + filename + ".csv", 'a')
+        graphing_file.write("Generation, avg_train_fit, avg_test_fit, max_train_fit_gen, max_test_fit_gen," \
+                            "max_train_fit, max_test_fit, time elapsed for gen\n")
+
         i = 0
         P = self.P
 
         pop_name = folder+"/pop_"+filename+".p"
 
-        #Load previously saved population
+        ' Code to load previously saved populations '
         if exists( pop_name ):
             pop_tmp = torch.load(pop_name)
 
@@ -81,8 +83,8 @@ class GA:
                  i = s['generation'] + 1
                  idx+=1
                  
-
-        while (True): 
+        ' Training Loop '
+        while (True):
             pool = multiprocessing.Pool(self.threads)
 
             start_time = time.time()
@@ -90,8 +92,11 @@ class GA:
             print("Generation ", i)
             sys.stdout.flush()
 
+
+            ' First trains models '
             print("Evaluating individuals on training set: ",len(P) )
-            for s in P:  
+            for s in P:
+                ' Run adds task to async pool '
                 s.run_solution(pool, 1, force_eval=True)
 
             train_fitness = []
@@ -99,32 +104,37 @@ class GA:
 
             for s in P:
                 s.is_elite = False
+                ' evaluate_solution grabs task from async pool '
                 train_f, test_f = s.evaluate_solution(1)
                 train_fitness += [train_f]
                 test_fitness += [test_f]
 
+            ' Then sorts models '
             self.sort_objective(P)
 
             max_train_fitness_gen = -sys.maxsize #keep track of highest fitness this generation
             max_test_fitness_gen = -sys.maxsize
 
+            ' Evaluates elites '
+            # Unnecessary for this code
             print("Evaluating elites on training set: ", self.top)
+            #for k in range(self.top):
+            #    P[k].run_solution(pool, self.elite_evals)
 
-            for k in range(self.top):      
-                P[k].run_solution(pool, self.elite_evals)
-            
             for k in range(self.top):
+                #train_f, test_f = P[k].evaluate_solution(self.elite_evals)
 
-                train_f, test_f = P[k].evaluate_solution(self.elite_evals)
-
-                if train_f>max_train_fitness_gen:   #All logic and evaluation is done with train data
-                    max_train_fitness_gen = train_f
-                    max_test_fitness_gen = test_f
+                ' Determine elites based on if fitness is > max_train_fitness of last iteration '
+                if -P[k].fitness > max_train_fitness_gen:   #All logic and evaluation is done with train data
+                    'Negative values important for sorting somehow'
+                    max_train_fitness_gen = -P[k].fitness
+                    max_test_fitness_gen = -P[k].testing_fitness
                     elite = P[k]
 
-                if train_f > max_train_fitness: #best fitness ever found
-                    max_train_fitness = train_f
-                    max_test_fitness = test_f
+                ' Determine champion by comparing if this is the best fitness ever found '
+                if -P[k].fitness > max_train_fitness: #best fitness ever found
+                    max_train_fitness = -P[k].fitness
+                    max_test_fitness = -P[k].testing_fitness
                     print("\tFound new champion! Train fitness: ", max_train_fitness," Test fitness: ", max_test_fitness)
 
                     best_ever = P[k]
@@ -136,15 +146,18 @@ class GA:
 
             sys.stdout.flush()
 
+            ' Close pool once all tasks are completed - synchronization step '
             pool.close()
 
+            ' Delete the worst models and keep the best, threshold is truncation threshold '
             Q = []
-
             replaced = []
             if len(P) > self.truncation_threshold-1:
                 for j in range(len(P)-1,self.truncation_threshold - 2,-1):
                     tmp = P.pop(j)
-                    replaced.append((tmp.id,tmp.device,tmp.r_gen.dataSource))
+                    replaced.append((tmp.device, tmp.r_gen.dataSource))
+                    ' replaced holds data necessary for new model that will eventually take pooped' \
+                    'models place to run in popped models GAIndividual context'
 
             P.append(elite) #Maybe it's in there twice now but that's okay
 
@@ -223,7 +236,8 @@ class GA:
         while len(Q) < self.truncation_threshold:
             selected_solution = None
             idx = 0
-            
+
+            ' Choose a remaining model from the population '
             s1 = random.choice(P)
             s2 = s1
             while s1 == s2:
@@ -239,6 +253,7 @@ class GA:
             elif s2.is_elite:  
                 selected_solution = s2
 
+            ' Clone child solution in and mutate '
             child_solution = selected_solution.clone_individual(replaced[idx])
             child_solution.mutate()
 
