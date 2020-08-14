@@ -78,10 +78,10 @@ class GPUWorker(object):
             self.elite_vals[0][gen] = self.fit[0][self.sorted[0][0]]
 
             ' Find elite and do evaluation '
-            # Step skipped for now, should involve test set evaluation
+            # Step skipped for now, could involve test set evaluation but not necessary
 
-            ' Copy top models randomly into bottom models w/ mutation '
-            for idx in self.sorted[0][self.top:-1]:
+            ' Copy models over truncation barrier randomly into bottom models w/ mutation '
+            for idx in self.sorted[0][self.trunc_threshold:-1]:
                 'Theory: CPU involved in for loop and calls to self only, while self not stored on gpu'
                 # Grab a model from an index between top and end
                 m = self.models[idx]
@@ -109,7 +109,7 @@ class GPUWorker(object):
                 m.linears[1].bias.add_(torch.mul(torch.randn_like(m.linears[1].bias, device=self.device),self.mut))
 
             ' Mutate top models except for elite '
-            for idx in self.sorted[0][1:self.top]:
+            for idx in self.sorted[0][1:self.trunc_threshold]:
                 m = self.models[idx]
                 m.linears[0].weight.add_(torch.mul(torch.randn_like(m.linears[0].weight,device=self.device), self.mut))
                 m.linears[0].bias.add_(torch.mul(torch.randn_like(m.linears[0].bias, device=self.device),self.mut))

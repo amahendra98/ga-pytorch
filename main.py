@@ -25,12 +25,12 @@ def main(argv):
 
     parser.add_argument('--device', type=str, help='Device list for model storage', default = ['cuda:1'])
 
-    parser.add_argument('--pop-size', type=int, help='Population size.', default = 100)
+    parser.add_argument('--pop-size', type=int, help='Population size.', default = 50)
 
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                             help='random seed (default: 1)')
 
-    parser.add_argument('--generations', type=int, default=500, metavar='N',
+    parser.add_argument('--generations', type=int, default=20, metavar='N',
                             help='number of generations to train (default: 1000)')
 
     parser.add_argument('--threads', type=int, default=10, metavar='N',
