@@ -11,7 +11,7 @@ import copy
 from train import DataStore
 
 from multiprocessing import set_start_method
-set_start_method('forkserver', force=True)
+set_start_method('spawn', force=True)
 
 
 class GA:
