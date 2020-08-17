@@ -9,164 +9,115 @@ import copy
 import datareader
 import random
 
-class DataStore(object):
-    def __init__(self, device, num_models):
+class GPUWorker(object):
+    ' Object exists on each GPU and handles individual GPU training '
+    def __init__(self,device,pop,batches,top,trunc,elite_evals,mut,model_flags,maxgen):
+        ' Constructor downloads parameters and allocates memory for models and data'
+        self.device = torch.device(device)
+        self.top = top
+        self.elite_evals = elite_evals
+        self.num_models = pop
+        self.num_batches = batches
+        self.models = []
         self.train_data = []
         self.test_data = []
-        self.device = device
-        self.num_models = num_models
-        self.id_list = [0] * num_models
+        self.mut = mut
+        self.max_gen = maxgen
 
-        # Create one batch for each model being trained using this "DataStore"
+        # Set trunc threshold to even integer
+        self.trunc_threshold = int(trunc*pop) + 1
+        if self.trunc_threshold%2 == 1:
+            self.trunc_threshold - 1
+
+        'Model generation. Theory is created on cpu, moved to gpu, ref stored on cpu'
+        for i in range(pop):
+            self.models.append(lorentz_model(model_flags).cuda(self.device))
+
+        'Data Storage. Theory is data loaded to cpu, moved to gpu, ref stored on cpu. Would like to store on gpu' \
+        'shared memory, however I could not figure out how to from pytorch'
         train_data_loader, test_data_loader = datareader.read_data(x_range=[i for i in range(0, 8)],
                                                                    y_range=[i for i in range(8, 308)],
                                                                    geoboundary=[20, 200, 20, 100],
                                                                    batch_size=0,
-                                                                   set_size=1,#self.num_models,
+                                                                   set_size=batches,
                                                                    normalize_input=True,
                                                                    data_dir='./',
                                                                    test_ratio=0.2)
 
-        # Get DataSets into arrays of tuples stored once on a desired device (avoids memory intensive pytorch iterators)
         for i, (geometry, spectra) in enumerate(train_data_loader):
             self.train_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
         for i, (geometry, spectra) in enumerate(test_data_loader):
             self.test_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
-    def get_batch(self, ident):
-        ident = int(ident)
-        idx = ident + self.id_list[ident]
-        #if self.num_models < self.id_list[ident]:
-        #    print("Done!")
-        #    return None
-        idx = idx%self.num_models
-        self.id_list[ident] += 1
-        print('got data with index: ', idx, '\tfrom id: ',ident)
-        return self.train_data[idx],self.test_data[idx]
+        'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
+        self.fit = torch.zeros(1,pop,device=self.device)
+        self.sorted = torch.zeros(1, pop, device=self.device)
 
+        'Create tensor stored on gpu to store eilte values over generations'
+        self.elite_vals = torch.zeros(1,maxgen, device=self.device)
 
-"""
-    def train_iter(self):
-        self.train_loader_iter = iter(self.train_loader)
+    def run(self, gen):
+        ' Method manages the run on a single gpu '
 
-    def test_iter(self):
-        self.test_loader_iter = iter(self.test_loader)
-
-    def get_train_batch(self):
-        batch_info = next(self.train_loader_iter)
-        self.train_iter()
-        return batch_info
-
-    def get_test_batch(self):
-        batch_info = next(self.test_loader_iter)
-        self.test_iter()
-        return batch_info
-"""
-
-
-class RolloutGenerator(object):
-    """ Utility to generate rollouts.
-    :attr device: device used to run VAE, MDRNN and Controller
-    :attr time_limit: rollouts have a maximum of time_limit timesteps
-    """
-    def __init__(self, store, ident):
-        self.lorentz = lorentz_model()
-        self.dataSource = store
-        self.id = ident
-
-    def do_rollout(self):
         with torch.no_grad():
-            result = self.dataSource.get_batch(self.id)
-            test_fitness = 0
-            train_fitness = 0
-            for i in range(self.dataSource.num_models):
-                (train_batch, test_batch) = result
-                (geometry_train, spectra_train) = train_batch
-                (geometry_test, spectra_test) = test_batch
 
-                lorentz_train_graph = self.lorentz(geometry_train)
-                lorentz_test_graph = self.lorentz(geometry_test)
+            'Queue every calculation of fitness for each model on GPU. Doing this all at once with all models already loaded' \
+            'Might cause slowdown due to lack of memory. Apparently only 16 or so kernels can execute at once, which I had not' \
+            'realized.'
+            for i,m in enumerate(self.models): #Might want a gpu version of counting to avoid enumerate.
+                g,s = self.train_data[torch.randint(0,self.num_batches,(1,1),device=self.device)[0][0]]
+                self.fit[0][i] = fitness_f(m(g),s)
 
-                train_fitness += fitness_f(lorentz_train_graph, spectra_train)
-                test_fitness += fitness_f(lorentz_test_graph, spectra_test)
-            self.dataSource.id_list[int(self.id)] = 0
-            return train_fitness,test_fitness
+            ' Wait for every kernel queued to execute '
+            torch.cuda.synchronize(self.device)
 
-def fitness_eval_parallel(pool, r_gen):#, controller_parameters):
-    return pool.apply_async(r_gen.do_rollout)
+            ' Get sorting based off of fitness array, this function is gpu optimized '
+            # Sorted is a tensor of indices organized from best to worst model
+            self.sorted = torch.argsort(self.fit, descending=True)
+            self.elite_vals[0][gen] = self.fit[0][self.sorted[0][0]]
 
+            ' Find elite and do evaluation '
+            # Step skipped for now, could involve test set evaluation but not necessary
 
-class GAIndividual():
-    '''
-    GA Individual
+            ' Copy models over truncation barrier randomly into bottom models w/ mutation '
+            for idx in self.sorted[0][self.trunc_threshold:-1]:
+                'Theory: CPU involved in for loop and calls to self only, while self not stored on gpu'
+                # Grab a model from an index between top and end
+                m = self.models[idx]
 
-    multi = flag to switch multiprocessing on or off
-    '''
-    def __init__(self, ident, device, time_limit, setting, store, multi=True):
-        self.id = ident
-        self.device = device
-        self.time_limit = time_limit #Unnecessary
-        self.multi = multi
-        self.mutation_power = 0.01
-        self.setting = setting
-        self.r_gen = RolloutGenerator(store, ident)
-        #self.r_gen.discrete_VAE = self.discrete_VAE
+                # Get random index i between 0 and top
+                # Put index into sorted[i] to get index of a top model
+                # Copy top model into place of a bottom model
+                m_t = self.models[self.sorted[0][torch.randint(0,self.top,(1,1),device=self.device)[0][0]]]
 
-        self.async_results = []
-        self.calculated_results = {}
+                # Copy top model parameters chosen into bottom module
+                m.linears[0].weight.copy_(m_t.linears[0].weight)
+                m.linears[1].weight.copy_(m_t.linears[1].weight)
+                m.linears[0].bias.copy_(m_t.linears[0].bias)
+                m.linears[1].bias.copy_(m_t.linears[1].bias)
+                m.lin_g.weight.copy_(m_t.lin_g.weight)
+                m.lin_wp.weight.copy_(m_t.lin_wp.weight)
+                m.lin_w0.weight.copy_(m_t.lin_w0.weight)
 
-    def run_solution(self, pool,evals=5, force_eval=False):
-        if force_eval:
-            self.calculated_results.pop(evals, None)
-        if (evals in self.calculated_results.keys()): #Already caculated results
-            return
+                # Access underlying model tensor (might not involve additional cpu calls)
+                # Create a new random tensor like it with val drawn from normal distn center=0 var=1
+                # Add random tensor to underlying model tensor in place
+                m.linears[0].weight.add_(torch.mul(torch.randn_like(m.linears[0].weight,device=self.device),self.mut))
+                m.linears[0].bias.add_(torch.mul(torch.randn_like(m.linears[0].bias, device=self.device),self.mut))
+                m.linears[1].weight.add_(torch.mul(torch.randn_like(m.linears[1].weight, device=self.device),self.mut))
+                m.linears[1].bias.add_(torch.mul(torch.randn_like(m.linears[1].bias, device=self.device),self.mut))
 
-        self.async_results = []
+            ' Mutate top models except for elite '
+            for idx in self.sorted[0][1:self.trunc_threshold]:
+                m = self.models[idx]
+                m.linears[0].weight.add_(torch.mul(torch.randn_like(m.linears[0].weight,device=self.device), self.mut))
+                m.linears[0].bias.add_(torch.mul(torch.randn_like(m.linears[0].bias, device=self.device),self.mut))
+                m.linears[1].weight.add_(torch.mul(torch.randn_like(m.linears[1].weight, device=self.device),self.mut))
+                m.linears[1].bias.add_(torch.mul(torch.randn_like(m.linears[1].bias, device=self.device),self.mut))
+                m.lin_g.weight.add_(torch.mul(torch.randn_like(m.lin_g.weight, device=self.device),self.mut))
+                m.lin_wp.weight.add_(torch.mul(torch.randn_like(m.lin_wp.weight, device=self.device), self.mut))
+                m.lin_w0.weight.add_(torch.mul(torch.randn_like(m.lin_w0.weight, device=self.device), self.mut))
 
-        for i in range(evals):
-            if self.multi:
-                self.async_results.append (fitness_eval_parallel(pool, self.r_gen))#, self.controller_parameters) )
-            else:
-                self.async_results.append (self.r_gen.do_rollout() )
-
-
-    def evaluate_solution(self, evals):
-        if (evals in self.calculated_results.keys()): #Already calculated?
-            mean_training_fitness, mean_testing_fitness = self.calculated_results[evals]
-        else:
-            if self.multi:
-                results = [t.get() for t in self.async_results]
-            else:
-                results = [t for t in self.async_results]
-
-            mean_training_fitness = np.mean ( [train_f[0] for train_f in results] )
-            mean_testing_fitness = np.mean( [test_f[1] for test_f in results] )
-            #std_training_fitness = np.std( results )
-
-            self.calculated_results[evals] = (mean_training_fitness, mean_testing_fitness)
-
-        self.fitness = -mean_training_fitness
-        return mean_training_fitness, mean_testing_fitness
-
-
-    def load_solution(self, filename):
-        s = torch.load(filename)
-        self.r_gen.lorentz.load_state_dict( s['lorentz'] )
-
-    def clone_individual(self,params):
-        child_solution = GAIndividual(params[0], params[1], self.time_limit, self.setting, params[2], multi=True)
-        child_solution.multi = self.multi
-        child_solution.fitness = self.fitness
-        child_solution.r_gen.lorentz = copy.deepcopy (self.r_gen.lorentz)
-        return child_solution
-    
-    def mutate_params(self, params):
-        for key in params:
-            if key in ['bn_linears.{}.num_batches_tracked'.format(i) for i in (0,1)]:
-                continue
-            tmp = np.random.normal(0, 1, params[key].size()) * self.mutation_power
-            params[key] += torch.from_numpy(tmp).float()
-
-    def mutate(self):
-        self.mutate_params(self.r_gen.lorentz.state_dict())
+            ' Synchronize all operations so that models all mutate and copy before next generation'
+            torch.cuda.synchronize(self.device)
