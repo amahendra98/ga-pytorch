@@ -1,3 +1,6 @@
 env/
 results/
 toy_data/
+.idea/
+__pycache__/
+.DS_Store
