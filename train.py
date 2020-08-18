@@ -65,9 +65,11 @@ class GPUWorker(object):
             'Queue every calculation of fitness for each model on GPU. Doing this all at once with all models already loaded' \
             'Might cause slowdown due to lack of memory. Apparently only 16 or so kernels can execute at once, which I had not' \
             'realized.'
+            rand_batch = torch.randint(0, self.num_batches, (1, len(self.models)), device=self.device)[0]
             for i,m in enumerate(self.models): #Might want a gpu version of counting to avoid enumerate.
-                g,s = self.train_data[torch.randint(0,self.num_batches,(1,1),device=self.device)[0][0]]
-                self.fit[0][i] = fitness_f(m(g),s)
+                g,s = self.train_data[[0]]
+                self.fit[0][i] = fitness_f(m(g),rand_batch[i])
+                #self.fit[0][i] = fitness_f(m(g), torch.randint(0, self.num_batches, (1, 1), device=self.device)[0][0])
 
             ' Wait for every kernel queued to execute '
             torch.cuda.synchronize(self.device)
@@ -81,6 +83,7 @@ class GPUWorker(object):
             # Step skipped for now, could involve test set evaluation but not necessary
 
             ' Copy models over truncation barrier randomly into bottom models w/ mutation '
+            rand_top = torch.randint(0, self.top, (1, len(self.models) - self.trunc_threshold), device=self.device)[0]
             for idx in self.sorted[0][self.trunc_threshold:-1]:
                 'Theory: CPU involved in for loop and calls to self only, while self not stored on gpu'
                 # Grab a model from an index between top and end
@@ -89,7 +92,8 @@ class GPUWorker(object):
                 # Get random index i between 0 and top
                 # Put index into sorted[i] to get index of a top model
                 # Copy top model into place of a bottom model
-                m_t = self.models[self.sorted[0][torch.randint(0,self.top,(1,1),device=self.device)[0][0]]]
+                m_t = self.models[self.sorted[0][rand_top[idx]]]
+                #m_t = self.models[self.sorted[0][torch.randint(0,self.top,(1,1),device=self.device)[0][0]]]
 
                 # Copy top model parameters chosen into bottom module
                 m.linears[0].weight.copy_(m_t.linears[0].weight)
