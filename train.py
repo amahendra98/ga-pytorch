@@ -172,3 +172,4 @@ class GPUWorker(object):
                 ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
 
             self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
+            plt.close()
