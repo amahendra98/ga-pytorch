@@ -12,7 +12,7 @@ class GPUWorker(object):
         ' Constructor downloads parameters and allocates memory for models and data'
         # User specified parameters
         self.insertion_probability = 0.1
-        self.novelty_factor = 0.5 # Determines how much importance novelty has vs. fitness in ga
+        self.novelty_factor = 1 # Determines how much importance novelty has vs. fitness in ga
         self.BC_dim = 5 # Number of BC params equals BC_dim * 3 * num_lorentz oscillators
         self.k = 25 # kth nearest neighbors in novelty calculation
         self.device = torch.device(device)
@@ -83,9 +83,9 @@ class GPUWorker(object):
             insrt_bools = np.random.random(size=self.num_models) < self.insertion_probability
 
             # Translate bool array into an array of indices and for loop through these indices
-            for i in range(0,self.num_models)[insrt_bools]:
+            for i in np.linspace(0,self.num_models-1,self.num_models,dtype=np.int32)[insrt_bools]:
                 # Copy and append selected models into archive
-                self.archive.append(copy.deep_copy(self.models[i]))
+                self.Archive.append(self.models[i])
 
                 # self.BC[0:self.num_models] stores population info, appended BCs belong to models in the archive
                 # Append the BC's of models added to archive to self.BC
@@ -103,13 +103,14 @@ class GPUWorker(object):
             g,s = self.test_data[0]
             # Run all top models through validation set and store fitness
             for i in range(0,self.trunc_threshold):
-                self.elite_eval[i] = lorentz_model.fitness_f(self.models[self.sorted[i]](g),s)
+                fwd,bc = self.models[self.sorted[i]](g)
+                self.elite_eval[i] = lorentz_model.fitness_f(fwd,s)
 
             # Sort the evaluation
             self.elite_eval,indices = torch.sort(self.elite_eval, descending=True)
 
             # Pick champion based on evaluation and fix self.sorted accordingly
-            if not(self.sorted[0] == self.elite_eval[0]):
+            if not(self.sorted[0] == indices[0]):
                 self.sorted[self.trunc_threshold-1] = self.sorted[0]
                 self.sorted[0] = indices[0]
 
@@ -190,9 +191,9 @@ class GPUWorker(object):
                 worst = self.models[self.sorted[-1]](t)
 
                 ax = fig.add_subplot(1, len(plot_arr), subplot)
-                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
-                ax.plot(np.linspace(0.5, 5, 300), w_elite[0].cpu().numpy(), color='tab:purple')
-                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
+                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy()[0], color='tab:red')
+                ax.plot(np.linspace(0.5, 5, 300), w_elite[0].cpu().numpy()[0], color='tab:purple')
+                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy()[0], color='tab:blue')
                 ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
 
             self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
@@ -208,8 +209,8 @@ class GPUWorker(object):
         neighbors = mx * torch.ones(self.num_models,self.k, device=self.device)
 
         # Compare models in population i against each model j in population and archive, to get novelty score of i
-        for i in self.num_models:
-            for j in every_model_len:
+        for i in range(self.num_models):
+            for j in range(every_model_len):
                 if i == j:
                     continue
                 # Euclidean distance of Behavior characteristics, BC list already setup to work w/ models+archive list

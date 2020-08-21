@@ -1,7 +1,4 @@
 argparse
-gym
-gym[box2d]
-Box2D
 numpy
 torch
 torchvision
