@@ -4,6 +4,7 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="jdk" jdkName="Python 3.8 (ga-torch-env)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="cpu_naive" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />

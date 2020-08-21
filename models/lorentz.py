@@ -6,12 +6,6 @@ from torch import pow, add, mul, div
 import numpy as np
 
 
-
-def fitness_f(x,y):
-    loss = nn.functional.mse_loss(x, y, reduction='mean')
-    return torch.neg(loss)
-
-
 class lorentz_model(nn.Module):
     def __init__(self,model_flags):
         super(lorentz_model,self).__init__()
@@ -63,5 +57,19 @@ class lorentz_model(nn.Module):
 
         e2 = torch.sum(e2, 1)
         T = e2.float()
-        return T
+        return T #, (w0[0],wp[0],g[0]) #For just one lorentzian
 
+    @staticmethod
+    def fitness_f(x, y, err_ceil=100):
+        loss = torch.pow(torch.sub(x, y), 2)
+        s0, s1 = loss.size()
+        s = s0 * s1
+        loss = torch.sum(loss)
+        loss = torch.div(loss, s)
+        loss[loss != loss] = err_ceil
+        return torch.neg(loss)
+'''
+    @staticmethod
+    def bc_func(w0, wp, g, steps):
+        pass
+'''
