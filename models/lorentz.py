@@ -57,7 +57,7 @@ class lorentz_model(nn.Module):
 
         e2 = torch.sum(e2, 1)
         T = e2.float()
-        return T #, (w0[0],wp[0],g[0]) #For just one lorentzian
+        return T, (w0[:][:][0],wp[:][:][0],g[:][:][0]) #For just one lorentzian
 
     @staticmethod
     def fitness_f(x, y, err_ceil=100):
@@ -68,8 +68,31 @@ class lorentz_model(nn.Module):
         loss = torch.div(loss, s)
         loss[loss != loss] = err_ceil
         return torch.neg(loss)
-'''
+
     @staticmethod
-    def bc_func(w0, wp, g, steps):
-        pass
-'''
+    def bc_func(z, steps, dev): #For single lorentzian only
+        (w0, wp, g) = z
+        base = int(len(w0)/steps)
+        rem = len(w0)%steps
+
+        w0.squeeze()
+        wp.squeeze()
+        g.squeeze()
+
+        placeholder = 1
+        if rem == 0:
+            placeholder = 0
+
+        n = torch.zeros(3,placeholder+base*steps,device=dev)
+
+        n[0][0] = torch.mean(w0[0:rem])
+        n[1][0] = torch.mean(wp[0:rem])
+        n[2][0] = torch.mean(g[0:rem])
+
+        for i in range(base):
+            n[0][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
+            n[1][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
+            n[2][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
+
+        return n
+

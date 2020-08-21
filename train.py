@@ -4,35 +4,46 @@ import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
+import copy
 
 class GPUWorker(object):
     ' Object exists on each GPU and handles individual GPU training '
     def __init__(self,device,pop,batches,top,trunc,mut,model_flags,maxgen):
         ' Constructor downloads parameters and allocates memory for models and data'
+        # User specified parameters
+        self.insertion_probability = 0.1
+        self.novelty_factor = 0.5 # Determines how much importance novelty has vs. fitness in ga
+        self.BC_dim = 5 # Number of BC params equals BC_dim * 3 * num_lorentz oscillators
+        self.k = 25 # kth nearest neighbors in novelty calculation
         self.device = torch.device(device)
         self.num_models = pop
         self.num_batches = batches
+        self.mut = mut
+        self.max_gen = maxgen
+        if top == 0 and trunc != 0:
+            self.trunc_threshold = int(trunc*pop)
+        elif trunc == 0 and top !=0:
+            self.trunc_threshold = top
+        else:
+            raise Exception("Either top or trunc must equal 0, but never both")
+
+        # Parameters to hold memory
         self.models = []
         self.train_data = []
         self.test_data = []
-        self.mut = mut
-        self.max_gen = maxgen
-
-        # Set trunc threshold to integer
-        if top == 0:
-            self.trunc_threshold = int(trunc*pop)
-        else:
-            self.trunc_threshold = top
-
         self.elite_eval = torch.zeros(self.trunc_threshold, device=self.device)
         self.writer = SummaryWriter("results/P{}_G{}_tr{}".format(pop, maxgen, self.trunc_threshold))
+        self.fit = torch.zeros(pop,device=self.device)
+        self.sorted = torch.zeros(pop, device=self.device)
+        self.novelty = torch.zeros(pop, device=self.device)
+        self.BC = [None] * pop #the first pop indices store population BC, but indices appended afterwards store archive
+        self.Archive = []
 
-        'Model generation. Theory is created on cpu, moved to gpu, ref stored on cpu'
+        ' Model generation '
         for i in range(pop):
             self.models.append(lorentz_model(model_flags).cuda(self.device))
 
-        'Data Storage. Theory is data loaded to cpu, moved to gpu, ref stored on cpu. Would like to store on gpu' \
-        'shared memory, however I could not figure out how to from pytorch'
+        ' Data Loading '
         train_data_loader, test_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
                                                                    y_range=[i for i in range(2, 302)],
                                                                    geoboundary=[20, 200, 20, 100],
@@ -48,26 +59,37 @@ class GPUWorker(object):
         for i, (geometry, spectra) in enumerate(test_data_loader):
             self.test_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
-        'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
-        self.fit = torch.zeros(pop,device=self.device)
-        self.sorted = torch.zeros(pop, device=self.device)
-        #self.BC = []
-
     def run(self, gen):
         ' Method manages the run on a single gpu '
 
         with torch.no_grad():
-
-            'Queue every calculation of fitness for each model on GPU. Doing this all at once with all models already loaded' \
-            'Might cause slowdown due to lack of memory. Apparently only 16 or so kernels can execute at once, which I had not' \
-            'realized.'
+            ' Queue every calculation of fitness for each model on GPU '
             # Generate array of random indices corresponding to each batch for each model
             rand_batch = np.random.randint(self.num_batches,size=self.num_models)
             for j in range(self.num_models):
                 g, s = self.train_data[rand_batch[j]]
-                fwd = self.models[j](g)
+                fwd, bc = self.models[j](g)
                 self.fit[j] = lorentz_model.fitness_f(fwd,s)
-                #self.BC.append(lorentz_model.bc_func(bc))
+                # calculate and store Behavior Characteristic of each model
+                self.BC[j] = lorentz_model.bc_func(bc,self.BC_dim,self.device)
+
+            ' Calculate Novelty Score for each model and add novetly score to fitness score '
+            # self.novelty_f loads novelty scores into self.novelty and moves to archive
+            self.novelty_f()
+            self.fit = self.fit * (1 - self.novelty_factor) + self.novelty * self.novelty_factor
+
+            ' Insert models into archive with insertion probability '
+            # Get bool array of insertion values based on probabilities and random selection of population
+            insrt_bools = np.random.random(size=self.num_models) < self.insertion_probability
+
+            # Translate bool array into an array of indices and for loop through these indices
+            for i in range(0,self.num_models)[insrt_bools]:
+                # Copy and append selected models into archive
+                self.archive.append(copy.deep_copy(self.models[i]))
+
+                # self.BC[0:self.num_models] stores population info, appended BCs belong to models in the archive
+                # Append the BC's of models added to archive to self.BC
+                self.BC.append(self.BC[i])
 
             ' Wait for every kernel queued to execute '
             torch.cuda.synchronize(self.device)
@@ -77,10 +99,8 @@ class GPUWorker(object):
             self.sorted = torch.argsort(self.fit, descending=True)
             self.writer.add_scalar('training loss', self.fit[self.sorted[0]], gen)
 
-            ' Find champion using test data '
-
+            ' Find champion by validating against test data set (compromises test data set for future eval)'
             g,s = self.test_data[0]
-
             # Run all top models through validation set and store fitness
             for i in range(0,self.trunc_threshold):
                 self.elite_eval[i] = lorentz_model.fitness_f(self.models[self.sorted[i]](g),s)
@@ -122,6 +142,8 @@ class GPUWorker(object):
 
 
     def collect_random_mutations(self):
+        ' Pre-loads mutation arrays so that rand is not called in for loop multiple times '
+
         rand_model_p = []
 
         rand_lay_1 = torch.mul(torch.randn(self.num_models, 100, 2, requires_grad=False, device=self.device),
@@ -154,7 +176,9 @@ class GPUWorker(object):
 
         return rand_model_p
 
+
     def save_plots(self,gen,rate=20,plot_arr=[0,9,90]):
+        ' Plots champion, worst elite, and worst graph against each graph indexed from the raw training data '
         if gen % rate == 0:
             fig = plt.figure()
 
@@ -172,3 +196,37 @@ class GPUWorker(object):
                 ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
 
             self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
+
+
+    def novelty_f(self):
+        ' Calculates novelty score of all models in one function '
+        # Get total length of all models to compare against
+        every_model_len = self.num_models + len(self.Archive)
+
+        # Generate array of neighbors for each model that is k long and has max possible value
+        mx = torch.finfo(torch.float32).max
+        neighbors = mx * torch.ones(self.num_models,self.k, device=self.device)
+
+        # Compare models in population i against each model j in population and archive, to get novelty score of i
+        for i in self.num_models:
+            for j in every_model_len:
+                if i == j:
+                    continue
+                # Euclidean distance of Behavior characteristics, BC list already setup to work w/ models+archive list
+                a = torch.nn.functional.mse_loss(self.BC[i],self.BC[j], reduction='mean')
+
+                # Check if a is smaller than last neighbor, if so let a replace it and check other vals in list
+                if a < neighbors[i][self.k-1]:
+                    neighbors[i][self.k-1] = a
+                    # Start from 2nd to last k and iterate through backwards (largest -> smallest)
+                    for l in range (self.k-2,-1,-1):
+                        # If a is greater than or equal to current value break loop (a already in position of last val)
+                        if a >= neighbors[i][l]:
+                            break
+                        # a <= current val if loop not broken, move current value into place of previous value and let
+                        # a take the place of the current value (doing this positions a for when loop ends)
+                        neighbors[i][l+1] = neighbors[i][l]
+                        neighbors[i][l] = a
+
+            # For each model input novelty score
+            self.novelty[i] = torch.mean(neighbors[i])
