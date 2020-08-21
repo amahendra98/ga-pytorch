@@ -1,5 +1,5 @@
 import torch
-from models import lorentz_model, fitness_f
+from models import lorentz_model
 import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
@@ -51,6 +51,7 @@ class GPUWorker(object):
         'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
         self.fit = torch.zeros(pop,device=self.device)
         self.sorted = torch.zeros(pop, device=self.device)
+        #self.BC = []
 
     def run(self, gen):
         ' Method manages the run on a single gpu '
@@ -64,7 +65,9 @@ class GPUWorker(object):
             rand_batch = np.random.randint(self.num_batches,size=self.num_models)
             for j in range(self.num_models):
                 g, s = self.train_data[rand_batch[j]]
-                self.fit[j] = fitness_f(self.models[j](g), s)
+                fwd = self.models[j](g)
+                self.fit[j] = lorentz_model.fitness_f(fwd,s)
+                #self.BC.append(lorentz_model.bc_func(bc))
 
             ' Wait for every kernel queued to execute '
             torch.cuda.synchronize(self.device)
@@ -80,7 +83,7 @@ class GPUWorker(object):
 
             # Run all top models through validation set and store fitness
             for i in range(0,self.trunc_threshold):
-                self.elite_eval[i] = fitness_f(self.models[self.sorted[i]](g),s)
+                self.elite_eval[i] = lorentz_model.fitness_f(self.models[self.sorted[i]](g),s)
 
             # Sort the evaluation
             self.elite_eval,indices = torch.sort(self.elite_eval, descending=True)
