@@ -7,8 +7,14 @@ import numpy as np
 
 
 
-def fitness_f(x,y):
-    loss = nn.functional.mse_loss(x, y, reduction='mean')
+def fitness_f(x,y, err_ceil=100):
+    loss = torch.pow(torch.sub(x,y),2)
+    s0,s1 = loss.size()
+    s = s0*s1
+    loss = torch.sum(loss)
+    loss = torch.div(loss,s)
+    loss[loss != loss] = err_ceil
+    #loss = nn.functional.mse_loss(x, y, reduction='mean')
     return torch.neg(loss)
 
 
