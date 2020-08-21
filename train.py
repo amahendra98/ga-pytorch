@@ -115,45 +115,7 @@ class GPUWorker(object):
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-
-            if gen%20 == 0:
-                fig = plt.figure()
-
-                g,s = self.train_data[0]
-                t = g[0].view((1,2))
-                champ_out = self.models[self.sorted[0]](t)
-                w_elite = self.models[self.sorted[self.trunc_threshold-1]](t)
-                worst = self.models[self.sorted[-1]](t)
-
-                ax = fig.add_subplot(1,3,1)
-                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
-                ax.plot(np.linspace(0.5,5,300),w_elite[0].cpu().numpy(),color='tab:purple')
-                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
-                ax.plot(np.linspace(0.5,5,300),s[0].cpu().numpy(),color='tab:orange')
-
-                t = g[9].view((1,2))
-                champ_out = self.models[self.sorted[0]](t)
-                w_elite = self.models[self.sorted[self.trunc_threshold-1]](t)
-                worst = self.models[self.sorted[-1]](t)
-
-                ax = fig.add_subplot(1,3,2)
-                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
-                ax.plot(np.linspace(0.5,5,300),w_elite[0].cpu().numpy(),color='tab:purple')
-                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
-                ax.plot(np.linspace(0.5,5,300),s[9].cpu().numpy(),color='tab:orange')
-
-                t = g[90].view((1, 2))
-                champ_out = self.models[self.sorted[0]](t)
-                w_elite = self.models[self.sorted[self.trunc_threshold - 1]](t)
-                worst = self.models[self.sorted[-1]](t)
-
-                ax = fig.add_subplot(1, 3, 3)
-                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
-                ax.plot(np.linspace(0.5, 5, 300), w_elite[0].cpu().numpy(), color='tab:purple')
-                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
-                ax.plot(np.linspace(0.5, 5, 300), s[90].cpu().numpy(), color='tab:orange')
-
-                self.writer.add_figure("{}_champ_worstElite_worst".format(gen),fig)
+            self.save_plots(gen,plot_arr=[0,9,90])
 
 
     def collect_random_mutations(self):
@@ -188,3 +150,22 @@ class GPUWorker(object):
         rand_model_p.append(rand_lin_wp)
 
         return rand_model_p
+
+    def save_plots(self,gen,rate=20,plot_arr=[0,9,90]):
+        if gen % rate == 0:
+            fig = plt.figure()
+
+            for subplot,idx in zip(range(1,len(plot_arr)+1,1),plot_arr):
+                g, s = self.train_data[0]
+                t = g[idx].view((1, 2))
+                champ_out = self.models[self.sorted[0]](t)
+                w_elite = self.models[self.sorted[self.trunc_threshold - 1]](t)
+                worst = self.models[self.sorted[-1]](t)
+
+                ax = fig.add_subplot(1, len(plot_arr), subplot)
+                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
+                ax.plot(np.linspace(0.5, 5, 300), w_elite[0].cpu().numpy(), color='tab:purple')
+                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
+                ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
+
+            self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
