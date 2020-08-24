@@ -101,18 +101,22 @@ class GPUWorker(object):
 
             ' Find champion by validating against test data set (compromises test data set for future eval)'
             g,s = self.test_data[0]
-            # Run all top models through validation set and store fitness
-            for i in range(0,self.trunc_threshold):
-                fwd,bc = self.models[self.sorted[i]](g)
-                self.elite_eval[i] = lorentz_model.fitness_f(fwd,s)
 
-            # Sort the evaluation
-            self.elite_eval,indices = torch.sort(self.elite_eval, descending=True)
+            # Run top training model over evaluation dataset to get elite_val fitness score and index
+            elite_val = lorentz_model.fitness_f(self.models[self.sorted[0]](g),s)
+            self.elite_eval[0] = elite_val
 
-            # Pick champion based on evaluation and fix self.sorted accordingly
-            if not(self.sorted[0] == indices[0]):
-                self.sorted[self.trunc_threshold-1] = self.sorted[0]
-                self.sorted[0] = indices[0]
+            # Run rest of top models over evaluation dataset, storing their scores and saving champion and its index
+            for i in range(1,self.trunc_threshold):
+                self.elite_eval[i] = lorentz_model.fitness_f(self.models[self.sorted[i]](g), s)
+                if elite_val < self.elite_eval[i]:
+                    # Swap current champion index in self.sorted with index of model that out-performed it in eval
+                    # Technically the sorted list is no longer in order, but this does not matter as the top models
+                    # are all still top models and the champion is in the champion position
+                    elite_val = self.elite_eval
+                    former_champ_idx = self.sorted[0]
+                    self.sorted[0] = self.sorted[i]
+                    self.sorted[i] = former_champ_idx
 
             ' Copy models over truncation barrier randomly into bottom models w/ mutation '
             # Generate array of random indices corresponding to models above trunc barrier, and collect mutation arrays
