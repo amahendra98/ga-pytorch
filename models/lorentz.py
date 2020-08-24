@@ -38,9 +38,17 @@ class lorentz_model(nn.Module):
                 out = fc(out)
         '''
 
-        w0 = F.relu(self.lin_w0(F.relu(out)).unsqueeze(2))  # size -> [1024,4,1]
-        wp = F.relu(self.lin_wp(F.relu(out)).unsqueeze(2))
-        g = F.relu(self.lin_g(F.relu(out)).unsqueeze(2))
+        w0 = F.relu(self.lin_w0(F.relu(out)))
+        wp = F.relu(self.lin_wp(F.relu(out)))
+        g = F.relu(self.lin_g(F.relu(out)))
+
+        w0_out = w0
+        wp_out = wp
+        g_out = g
+
+        w0 = w0.unsqueeze(2) * 1  # size -> [1024,4,1]
+        wp = wp.unsqueeze(2) * 1
+        g = g.unsqueeze(2) * 0.1
         # g = torch.sigmoid(self.lin_g(out).unsqueeze(2))
 
         # Expand them to the make the parallelism, (batch_size, #Lor, #spec_point)
@@ -57,7 +65,7 @@ class lorentz_model(nn.Module):
 
         e2 = torch.sum(e2, 1)
         T = e2.float()
-        return T, (w0[:][:][0],wp[:][:][0],g[:][:][0]) #For just one lorentzian
+        return T, (w0_out,wp_out,g_out) #For just one lorentzian
 
     @staticmethod
     def fitness_f(x, y, err_ceil=100):
