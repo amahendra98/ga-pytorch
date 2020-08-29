@@ -1,3 +1,11 @@
+import os
+os.environ['PATH'] += os.pathsep + 'C:/Program Files/Graphviz 2.44.1/bin/'
+
+import sys
+sys.path.append('C:/Program Files/Graphviz 2.44.1/bin/dot.exe')
+
+import time
+
 import torch
 from models import lorentz_model
 import datareader
@@ -25,14 +33,15 @@ class GPUWorker(object):
             self.trunc_threshold = top
 
         self.elite_eval = torch.zeros(self.trunc_threshold, device=self.device)
-        self.writer = SummaryWriter("results/P{}_G{}_tr{}".format(pop, maxgen, self.trunc_threshold))
+        (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
+        self.writer = SummaryWriter("results/P{}_G{}_tr{}_{}{}{}_{}{}{}".format(pop, maxgen, self.trunc_threshold,y,m,d,
+                                                                                hr,min,s))
 
-        'Model generation. Theory is created on cpu, moved to gpu, ref stored on cpu'
+        'Model generation. Created on cpu, moved to gpu, ref stored on cpu'
         for i in range(pop):
             self.models.append(lorentz_model(model_flags).cuda(self.device))
 
-        'Data Storage. Theory is data loaded to cpu, moved to gpu, ref stored on cpu. Would like to store on gpu' \
-        'shared memory, however I could not figure out how to from pytorch'
+        'Data set Storage'
         train_data_loader, test_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
                                                                    y_range=[i for i in range(2, 302)],
                                                                    geoboundary=[20, 200, 20, 100],
@@ -48,10 +57,24 @@ class GPUWorker(object):
         for i, (geometry, spectra) in enumerate(test_data_loader):
             self.test_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
+        # Load in best_model.pt and start a population of its mutants
+        with torch.no_grad():
+            rand_mut = self.collect_random_mutations()
+            self.models[0] = torch.load('best_model.pt', map_location=self.device)
+
+            m_t = self.models[0]
+            for i in range(0, pop):
+                m = self.models[i]
+                for (mp, m_tp, mut) in zip(m.parameters(), m_t.parameters(), rand_mut):
+                    mp.copy_(m_tp).add_(mut[i])
+
+
         'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
         self.fit = torch.zeros(pop,device=self.device)
         self.sorted = torch.zeros(pop, device=self.device)
-        #self.BC = []
+        self.hist_plot = []
+        self.lorentz_plot = []
+
 
     def run(self, gen):
         ' Method manages the run on a single gpu '
@@ -65,6 +88,7 @@ class GPUWorker(object):
             rand_batch = np.random.randint(self.num_batches,size=self.num_models)
             for j in range(self.num_models):
                 g, s = self.train_data[rand_batch[j]]
+                self.models[j].eval()
                 fwd = self.models[j](g)
                 self.fit[j] = lorentz_model.fitness_f(fwd,s)
                 #self.BC.append(lorentz_model.bc_func(bc))
@@ -91,7 +115,7 @@ class GPUWorker(object):
                     # Swap current champion index in self.sorted with index of model that out-performed it in eval
                     # Technically the sorted list is no longer in order, but this does not matter as the top models
                     # are all still top models and the champion is in the champion position
-                    elite_val = self.elite_eval
+                    elite_val = self.elite_eval[i]
                     former_champ_idx = self.sorted[0]
                     self.sorted[0] = self.sorted[i]
                     self.sorted[i] = former_champ_idx
@@ -121,7 +145,7 @@ class GPUWorker(object):
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-            self.save_plots(gen,plot_arr=[0,9,90])
+            self.save_plots(gen,plot_arr=[0,18,36,63])
 
 
     def collect_random_mutations(self):
@@ -143,6 +167,23 @@ class GPUWorker(object):
                                   self.mut)
         rand_model_p.append(rand_bi_2)
 
+        #Batchnorm mods
+        rand_bn_lin_1 =torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_lin_1)
+
+        rand_bn_bias_1 =torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_bias_1)
+
+        rand_bn_lin_2 =torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_lin_2)
+
+        rand_bn_bias_2 =torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_bias_2)
+
         rand_lin_g = torch.mul(torch.randn(self.num_models, 1, 100, requires_grad=False, device=self.device),
                                    self.mut)
         rand_model_p.append(rand_lin_g)
@@ -155,24 +196,69 @@ class GPUWorker(object):
                                     self.mut)
         rand_model_p.append(rand_lin_wp)
 
+        #Batchnorm mods
+        rand_bn_w0_w =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_w0_w)
+        rand_bn_w0_b =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_w0_b)
+        rand_bn_wp_w =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_wp_w)
+        rand_bn_wp_b =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_wp_b)
+        rand_bn_g_w =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_g_w)
+        rand_bn_g_b =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
+                                  self.mut)
+        rand_model_p.append(rand_bn_g_b)
+
         return rand_model_p
 
-    def save_plots(self,gen,rate=20,plot_arr=[0,9,90]):
+    def save_plots(self,gen,rate=10,plot_arr=[0,9,18,27,36,45,54,63,72,81,90]):
         if gen % rate == 0:
             fig = plt.figure()
 
+            g, s = self.train_data[0]
             for subplot,idx in zip(range(1,len(plot_arr)+1,1),plot_arr):
-                g, s = self.train_data[0]
                 t = g[idx].view((1, 2))
-                champ_out = self.models[self.sorted[0]](t)
-                w_elite = self.models[self.sorted[self.trunc_threshold - 1]](t)
-                worst = self.models[self.sorted[-1]](t)
+                champ = self.models[self.sorted[0]]
+                champ_out = champ(t)[0].cpu().numpy()
+                w_elite = self.models[self.sorted[self.trunc_threshold - 1]]
+                w_elite_out = w_elite(t)[0].cpu().numpy()
+                worst = self.models[self.sorted[-1]]
+                worst_out = worst(t)[0].cpu().numpy()
+                sn = s[idx].cpu().numpy()
+
+                self.lorentz_plot.append(champ_out)
+                self.lorentz_plot.append(w_elite_out)
+                self.lorentz_plot.append(worst_out)
+                self.lorentz_plot.append(sn)
 
                 ax = fig.add_subplot(1, len(plot_arr), subplot)
-                ax.plot(np.linspace(0.5, 5, 300), worst[0].cpu().numpy(), color='tab:red')
-                ax.plot(np.linspace(0.5, 5, 300), w_elite[0].cpu().numpy(), color='tab:purple')
-                ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy(), color='tab:blue')
-                ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
+                ax.plot(np.linspace(0.5, 5, 300), worst_out, color='tab:red', label='worst')
+                ax.plot(np.linspace(0.5, 5, 300), w_elite_out, color='tab:purple',label='worst elite')
+                ax.plot(np.linspace(0.5, 5, 300), champ_out, color='tab:blue', label='Champion')
+                ax.plot(np.linspace(0.5, 5, 300), sn, color='tab:orange',label='Truth Spectra')
+            plt.legend()
+            plt.xlabel("Frequency (THz)")
+            plt.ylabel("e2")
 
-            self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
+            self.writer.add_figure("{}_Lorentz_Evolution".format(gen), fig)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(1,1,1)
+            champ_out = self.models[self.sorted[0]](g)
+            hist_ydata = lorentz_model.fitness_by_sample(champ_out, s).cpu().numpy()
+            self.hist_plot.append(hist_ydata)
+            ax.hist(hist_ydata, bins=np.arange(0,5,0.05))
+            #ax.set_xticks([0,0.1,0.3,0.5,0.8,1,2,5,10,20,50])
+            #plt.xscale("log")
+            plt.xlabel("MSE_Loss over training")
+            plt.ylabel("Number of datasets")
+
+            self.writer.add_figure("{}_Histogram".format(gen), fig)
             plt.close()

@@ -3,7 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/../cpu_naive/.idea/cpu_naive.iml" filepath="$PROJECT_DIR$/../cpu_naive/.idea/cpu_naive.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../ga-ns/.idea/ga-ns.iml" filepath="$PROJECT_DIR$/../ga-ns/.idea/ga-ns.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/ga-pytorch.iml" filepath="$PROJECT_DIR$/.idea/ga-pytorch.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../mlmOK_Pytorch/.idea/mlmOK_Pytorch.iml" filepath="$PROJECT_DIR$/../mlmOK_Pytorch/.idea/mlmOK_Pytorch.iml" />
     </modules>
   </component>
 </project>

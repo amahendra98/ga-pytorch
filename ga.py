@@ -1,13 +1,8 @@
-import sys, random
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import matplotlib.patches as patches
+import matplotlib.path as path
 import numpy as np
-import pickle
-import torch
-import time
-import math
-from os.path import join, exists
-import multiprocessing
-import gc
-import copy
 import time
 
 class GA:
@@ -43,7 +38,6 @@ class GA:
 
         'Ideally get rid of while loop and turn it into recursive gpu calls without cpu interference'
         i = 0
-
         start = time.time()
         while(i<self.max_gen):
             for w in self.workers: w.run(i)
@@ -51,6 +45,76 @@ class GA:
         end = time.time()
 
         print("Time Elapsed: ", end - start)
+
+        fig = plt.figure()
+        lines = []
+        for i in range(1,5):
+            ax = fig.add_subplot(1, 4, i)
+            ax.set(xlim=(0,5),ylim=(0,self.workers[0].lorentz_plot[(i*4) + 3].max() + 1))
+            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4)], color='tab:blue',label='Champion')[0])
+            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 1], color='tab:purple',label='worst elite')[0])
+            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 2], color='tab:red', label='worst')[0])
+            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 3], color='tab:orange', label='Truth Spectra')[0])
+        plt.legend()
+        plt.xlabel("Frequency (THz)")
+        plt.ylabel("e2")
+
+
+        n,bins = np.histogram(self.workers[0].hist_plot[0],bins=np.arange(0,5,0.05))
+
+        left = np.array(bins[:-1])
+        right = np.array(bins[1:])
+        bottom = np.zeros(len(left))
+        top = bottom + n
+        nrects = len(left)
+
+        nverts = nrects * (1 + 3 + 1)
+        verts = np.zeros((nverts, 2))
+        codes = np.ones(nverts, int) * path.Path.LINETO
+        codes[0::5] = path.Path.MOVETO
+        codes[4::5] = path.Path.CLOSEPOLY
+        verts[0::5, 0] = left
+        verts[0::5, 1] = bottom
+        verts[1::5, 0] = left
+        verts[1::5, 1] = top
+        verts[2::5, 0] = right
+        verts[2::5, 1] = top
+        verts[3::5, 0] = right
+        verts[3::5, 1] = bottom
+
+        def animate_lorentz(i):
+            for j, line in enumerate(lines):
+                line.set_ydata(self.workers[0].lorentz_plot[j + (i*16)])
+
+        Lorentz_animation = FuncAnimation(fig, animate_lorentz, interval=200, frames=100)
+        Lorentz_animation.save('Lorentz_{}.gif'.format(start), writer='imagemagick')
+
+
+        patch = None
+        def animate_histogram(i):
+            n, bins = np.histogram(self.workers[0].hist_plot[i], bins=np.arange(0,5,0.05))
+            top = bottom + n
+            verts[1::5, 1] = top
+            verts[2::5, 1] = top
+            return [patch, ]
+
+        fig, ax = plt.subplots()
+        barpath = path.Path(verts, codes)
+        patch = patches.PathPatch(
+            barpath, facecolor='blue', edgecolor='purple', alpha=0.5)
+        ax.add_patch(patch)
+
+        ax.set_xlim(left[0], right[-1])
+        #ax.set_xticks([0, 0.1, 0.3, 0.5, 0.8, 1, 2, 5, 10, 20, 50])
+        #ax.set_xscale('log')
+        ax.set_ylim(bottom.min(), 2*top.max())
+        ax.set_xlabel("MSE_Loss")
+        ax.set_ylabel("Number of datasets")
+
+        Histogram_animation = FuncAnimation(fig, animate_histogram, 100, repeat=False, blit=True)
+        Histogram_animation.save('Histogram_{}.gif'.format(start), writer='imagemagic')
+
+        plt.draw()
 
 
 '''

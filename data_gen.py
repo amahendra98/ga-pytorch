@@ -109,10 +109,21 @@ def Prepare_Data(osc, sets, batch_size):
     print('Number of Test samples is {}'.format(len(ftrTest)))
     return train_loader, test_loader
 
-train_loader, test_loader = Prepare_Data(1, 10000, 1000)
+def gen_data(name):
+    train_loader, test_loader = Prepare_Data(1, 10000, 1000)
 
-with open('toy_data/mm1d_2.csv', 'a') as datafile:
-    for j, (geometry, spectra) in enumerate(train_loader):
-        concate = np.concatenate([geometry, spectra], axis=1)
-        #print(np.shape(concate))
-        np.savetxt(datafile, concate, delimiter=',')
+    with open(name, 'a') as datafile:
+        for j, (geometry, spectra) in enumerate(train_loader):
+            concate = np.concatenate([geometry, spectra], axis=1)
+            # print(np.shape(concate))
+            np.savetxt(datafile, concate, delimiter=',')
+
+
+if __name__ == "__main__":
+    train_loader, test_loader = Prepare_Data(1, 10000, 1000)
+
+    with open('toy_data/mm1d_6.csv', 'a') as datafile:
+        for j, (geometry, spectra) in enumerate(train_loader):
+            concate = np.concatenate([geometry, spectra], axis=1)
+            #print(np.shape(concate))
+            np.savetxt(datafile, concate, delimiter=',')

@@ -5,6 +5,8 @@
     <orderEntry type="jdk" jdkName="Python 3.8 (ga-torch-env)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="cpu_naive" />
+    <orderEntry type="module" module-name="mlmOK_Pytorch" />
+    <orderEntry type="module" module-name="ga-ns" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />

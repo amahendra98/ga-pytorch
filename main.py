@@ -23,13 +23,13 @@ def main(argv):
 
     parser.add_argument('--pop-size', type=int, help='Population size.', default=2000)
 
-    parser.add_argument('--generations', type=int, default=1002, metavar='N',
+    parser.add_argument('--generations', type=int, default=1010, metavar='N',
                             help='number of generations to train (default: 1000)')
 
-    parser.add_argument('--top', type=int, default=0, metavar='N',
+    parser.add_argument('--top', type=int, default=30, metavar='N',
                             help='numer of top elites that should be re-evaluated')
 
-    parser.add_argument('--trunc-threshold', type=int, default=.015,
+    parser.add_argument('--trunc-threshold', type=int, default=0,
                             help='Fraction of models that survive each generation')
 
     parser.add_argument('--mutation-power', type=float, help="Mutation Power", default = 0.02)
