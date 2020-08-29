@@ -23,7 +23,7 @@ def main(argv):
 
     parser.add_argument('--pop-size', type=int, help='Population size.', default=2000)
 
-    parser.add_argument('--generations', type=int, default=1010, metavar='N',
+    parser.add_argument('--generations', type=int, default=2005, metavar='N',
                             help='number of generations to train (default: 1000)')
 
     parser.add_argument('--top', type=int, default=30, metavar='N',
@@ -36,7 +36,7 @@ def main(argv):
 
     parser.add_argument('--num-batches', type=int, help='Number of batches of trianing data', default = 1)
 
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
+    parser.add_argument('--seed', type=int, default=1234, metavar='S',
                             help='random seed (default: 1)')
 
     parser.add_argument('--folder', type=str, default='results', metavar='N',

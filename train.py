@@ -7,7 +7,8 @@ sys.path.append('C:/Program Files/Graphviz 2.44.1/bin/dot.exe')
 import time
 
 import torch
-from models import lorentz_model
+#from models import network_model
+from network_model import Forward
 import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
@@ -23,6 +24,7 @@ class GPUWorker(object):
         self.models = []
         self.train_data = []
         self.test_data = []
+        self.val_data = []
         self.mut = mut
         self.max_gen = maxgen
 
@@ -39,10 +41,10 @@ class GPUWorker(object):
 
         'Model generation. Created on cpu, moved to gpu, ref stored on cpu'
         for i in range(pop):
-            self.models.append(lorentz_model(model_flags).cuda(self.device))
+            self.models.append(Forward(model_flags).cuda(self.device))
 
         'Data set Storage'
-        train_data_loader, test_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
+        train_data_loader, test_data_loader, val_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
                                                                    y_range=[i for i in range(2, 302)],
                                                                    geoboundary=[20, 200, 20, 100],
                                                                    batch_size=0,
@@ -51,22 +53,27 @@ class GPUWorker(object):
                                                                    data_dir='./',
                                                                    test_ratio=0.2)
 
-        for i, (geometry, spectra) in enumerate(train_data_loader):
+        for (geometry, spectra) in train_data_loader:
             self.train_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
-        for i, (geometry, spectra) in enumerate(test_data_loader):
+        for (geometry, spectra) in test_data_loader:
             self.test_data.append( (geometry.to(self.device),spectra.to(self.device)) )
+
+        for (geometry, spectra) in val_data_loader:
+            self.val_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
         # Load in best_model.pt and start a population of its mutants
         with torch.no_grad():
             rand_mut = self.collect_random_mutations()
             self.models[0] = torch.load('best_model.pt', map_location=self.device)
+            self.models[0].eval()
 
             m_t = self.models[0]
-            for i in range(0, pop):
+            for i in range(1, pop):
                 m = self.models[i]
                 for (mp, m_tp, mut) in zip(m.parameters(), m_t.parameters(), rand_mut):
                     mp.copy_(m_tp).add_(mut[i])
+                m.eval()
 
 
         'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
@@ -90,7 +97,7 @@ class GPUWorker(object):
                 g, s = self.train_data[rand_batch[j]]
                 self.models[j].eval()
                 fwd = self.models[j](g)
-                self.fit[j] = lorentz_model.fitness_f(fwd,s)
+                self.fit[j] = Forward.fitness_f(fwd,s)
                 #self.BC.append(lorentz_model.bc_func(bc))
 
             ' Wait for every kernel queued to execute '
@@ -99,18 +106,21 @@ class GPUWorker(object):
             ' Get sorting based off of fitness array, this function is gpu optimized '
             # Sorted is a tensor of indices organized from best to worst model
             self.sorted = torch.argsort(self.fit, descending=True)
-            self.writer.add_scalar('training loss', self.fit[self.sorted[0]], gen)
+            self.writer.add_scalar('training loss', -self.fit[self.sorted[0]], gen)
+            g,s = self.val_data[0]
+            fwd = self.models[self.sorted[0]](g)
+            self.writer.add_scalar('validation loss', -Forward.fitness_f(fwd,s), gen)
 
             ' Find champion by validating against test data set (compromises test data set for future eval)'
             g,s = self.test_data[0]
 
             # Run top training model over evaluation dataset to get elite_val fitness score and index
-            elite_val = lorentz_model.fitness_f(self.models[self.sorted[0]](g),s)
+            elite_val = Forward.fitness_f(self.models[self.sorted[0]](g),s)
             self.elite_eval[0] = elite_val
 
             # Run rest of top models over evaluation dataset, storing their scores and saving champion and its index
             for i in range(1,self.trunc_threshold):
-                self.elite_eval[i] = lorentz_model.fitness_f(self.models[self.sorted[i]](g), s)
+                self.elite_eval[i] = Forward.fitness_f(self.models[self.sorted[i]](g), s)
                 if elite_val < self.elite_eval[i]:
                     # Swap current champion index in self.sorted with index of model that out-performed it in eval
                     # Technically the sorted list is no longer in order, but this does not matter as the top models
@@ -252,7 +262,7 @@ class GPUWorker(object):
             fig = plt.figure()
             ax = fig.add_subplot(1,1,1)
             champ_out = self.models[self.sorted[0]](g)
-            hist_ydata = lorentz_model.fitness_by_sample(champ_out, s).cpu().numpy()
+            hist_ydata = Forward.fitness_by_sample(champ_out, s).cpu().numpy()
             self.hist_plot.append(hist_ydata)
             ax.hist(hist_ydata, bins=np.arange(0,5,0.05))
             #ax.set_xticks([0,0.1,0.3,0.5,0.8,1,2,5,10,20,50])

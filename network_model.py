@@ -6,9 +6,9 @@ from torch import pow, add, mul, div
 import numpy as np
 
 
-class network_model(nn.Module):
+class Forward(nn.Module):
     def __init__(self,model_flags):
-        super(network_model,self).__init__()
+        super(Forward,self).__init__()
 
         self.linear = model_flags['linear']
         self.num_spec_point = model_flags['num_spec_point']
