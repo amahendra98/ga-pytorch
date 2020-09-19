@@ -9,6 +9,7 @@ import time
 import torch
 #from models import network_model
 from network_model import Forward
+from models.baseline import model
 import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
@@ -27,6 +28,7 @@ class GPUWorker(object):
         self.val_data = []
         self.mut = mut
         self.max_gen = maxgen
+        self.flags = model_flags
 
         # Set trunc threshold to integer
         if top == 0:
@@ -36,16 +38,19 @@ class GPUWorker(object):
 
         self.elite_eval = torch.zeros(self.trunc_threshold, device=self.device)
         (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
-        self.writer = SummaryWriter("results/P{}_G{}_tr{}_{}{}{}_{}{}{}".format(pop, maxgen, self.trunc_threshold,y,m,d,
-                                                                                hr,min,s))
+        #self.writer = SummaryWriter("results/P{}_G{}_tr{}_{}{}{}_{}{}{}".format(pop, maxgen, self.trunc_threshold,y,m,d,
+        #                                                                        hr,min,s))
+
+        self.writer = SummaryWriter("results/Iris_m{}_P{}_t{}_{}{}{}_{}{}{}".format(mut,pop,top,y,m,d,hr,min,s))
 
         'Model generation. Created on cpu, moved to gpu, ref stored on cpu'
         for i in range(pop):
-            self.models.append(Forward(model_flags).cuda(self.device))
+            #self.models.append(Forward(model_flags).cuda(self.device))
+            self.models.append(model(model_flags).cuda(self.device))
 
         'Data set Storage'
-        train_data_loader, test_data_loader, val_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
-                                                                   y_range=[i for i in range(2, 302)],
+        train_data_loader, test_data_loader, val_data_loader = datareader.read_data(x_range=[i for i in range(0, 4)],
+                                                                   y_range=[i for i in range(4, 7)],
                                                                    geoboundary=[20, 200, 20, 100],
                                                                    batch_size=0,
                                                                    set_size=batches,
@@ -62,7 +67,8 @@ class GPUWorker(object):
         for (geometry, spectra) in val_data_loader:
             self.val_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
-        # Load in best_model.pt and start a population of its mutants
+        ' Load in best_model.pt and start a population of its mutants '
+        """
         with torch.no_grad():
             rand_mut = self.collect_random_mutations()
             self.models[0] = torch.load('best_model.pt', map_location=self.device)
@@ -74,6 +80,7 @@ class GPUWorker(object):
                 for (mp, m_tp, mut) in zip(m.parameters(), m_t.parameters(), rand_mut):
                     mp.copy_(m_tp).add_(mut[i])
                 m.eval()
+        """
 
 
         'GPU Tensor that stores fitness values & sorts from population. Would Ideally store in gpu shared memory'
@@ -96,8 +103,8 @@ class GPUWorker(object):
             for j in range(self.num_models):
                 g, s = self.train_data[rand_batch[j]]
                 self.models[j].eval()
-                fwd = self.models[j](g)
-                self.fit[j] = Forward.fitness_f(fwd,s)
+                fwd, w0,wp,g_n = self.models[j](g)
+                self.fit[j] = Forward.fitness_f(fwd,s) #- self.custom_loss(w0,wp,g_n,gen)
                 #self.BC.append(lorentz_model.bc_func(bc))
 
             ' Wait for every kernel queued to execute '
@@ -108,19 +115,22 @@ class GPUWorker(object):
             self.sorted = torch.argsort(self.fit, descending=True)
             self.writer.add_scalar('training loss', -self.fit[self.sorted[0]], gen)
             g,s = self.val_data[0]
-            fwd = self.models[self.sorted[0]](g)
+            fwd,w0,wp,g_n = self.models[self.sorted[0]](g)
             self.writer.add_scalar('validation loss', -Forward.fitness_f(fwd,s), gen)
+            #.writer.add_scalar('validation loss', -Forward.fitness_f(fwd, s) + self.custom_loss(w0, wp, g_n, gen),gen)
 
             ' Find champion by validating against test data set (compromises test data set for future eval)'
             g,s = self.test_data[0]
 
             # Run top training model over evaluation dataset to get elite_val fitness score and index
-            elite_val = Forward.fitness_f(self.models[self.sorted[0]](g),s)
+            fwd,w0,wp,g_n = self.models[self.sorted[0]](g)
+            elite_val = Forward.fitness_f(fwd,s) # - self.custom_loss(w0,wp,g_n,gen)
             self.elite_eval[0] = elite_val
 
             # Run rest of top models over evaluation dataset, storing their scores and saving champion and its index
             for i in range(1,self.trunc_threshold):
-                self.elite_eval[i] = Forward.fitness_f(self.models[self.sorted[i]](g), s)
+                fwd, w0, wp, g_n = self.models[self.sorted[i]](g)
+                self.elite_eval[i] = Forward.fitness_f(fwd, s) #- self.custom_loss(w0,wp,g_n,gen)
                 if elite_val < self.elite_eval[i]:
                     # Swap current champion index in self.sorted with index of model that out-performed it in eval
                     # Technically the sorted list is no longer in order, but this does not matter as the top models
@@ -155,12 +165,37 @@ class GPUWorker(object):
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-            self.save_plots(gen,plot_arr=[0,18,36,63])
+            #self.save_plots(gen,plot_arr=[0,18,36,63])
 
 
     def collect_random_mutations(self):
         rand_model_p = []
 
+        rand_lay_1 = torch.mul(torch.randn(self.num_models, 2, 4, requires_grad=False, device=self.device),
+                               self.mut)
+        rand_model_p.append(rand_lay_1)
+
+        rand_bi_1 = torch.mul(torch.randn(self.num_models, 2, requires_grad=False, device=self.device),
+                              self.mut)
+        rand_model_p.append(rand_bi_1)
+
+        rand_lay_2 = torch.mul(torch.randn(self.num_models, 3, 2, requires_grad=False, device=self.device),
+                               self.mut)
+        rand_model_p.append(rand_lay_2)
+
+        rand_bi_2 = torch.mul(torch.randn(self.num_models, 3, requires_grad=False, device=self.device),
+                              self.mut)
+        rand_model_p.append(rand_bi_2)
+
+        rand_lay_3 = torch.mul(torch.randn(self.num_models, 3, 3, requires_grad=False, device=self.device),
+                               self.mut)
+        rand_model_p.append(rand_lay_3)
+
+        rand_bi_3 = torch.mul(torch.randn(self.num_models, 3, requires_grad=False, device=self.device),
+                              self.mut)
+        rand_model_p.append(rand_bi_3)
+
+        '''
         rand_lay_1 = torch.mul(torch.randn(self.num_models, 100, 2, requires_grad=False, device=self.device),
                                    self.mut)
         rand_model_p.append(rand_lay_1)
@@ -225,7 +260,7 @@ class GPUWorker(object):
         rand_bn_g_b =torch.mul(torch.randn(self.num_models, 1, requires_grad=False, device=self.device),
                                   self.mut)
         rand_model_p.append(rand_bn_g_b)
-
+        '''
         return rand_model_p
 
     def save_plots(self,gen,rate=10,plot_arr=[0,9,18,27,36,45,54,63,72,81,90]):
@@ -236,11 +271,14 @@ class GPUWorker(object):
             for subplot,idx in zip(range(1,len(plot_arr)+1,1),plot_arr):
                 t = g[idx].view((1, 2))
                 champ = self.models[self.sorted[0]]
-                champ_out = champ(t)[0].cpu().numpy()
+                champ_out,w,wp,gn = champ(t)
+                champ_out = champ_out[0].cpu().numpy()
                 w_elite = self.models[self.sorted[self.trunc_threshold - 1]]
-                w_elite_out = w_elite(t)[0].cpu().numpy()
+                w_elite_out,w,wp,gn = w_elite(t)
+                w_elite_out = w_elite_out[0].cpu().numpy()
                 worst = self.models[self.sorted[-1]]
-                worst_out = worst(t)[0].cpu().numpy()
+                worst_out,w,wp,gn = worst(t)
+                worst_out = worst_out[0].cpu().numpy()
                 sn = s[idx].cpu().numpy()
 
                 self.lorentz_plot.append(champ_out)
@@ -261,8 +299,9 @@ class GPUWorker(object):
 
             fig = plt.figure()
             ax = fig.add_subplot(1,1,1)
-            champ_out = self.models[self.sorted[0]](g)
+            champ_out,w,wp,gn = self.models[self.sorted[0]](g)
             hist_ydata = Forward.fitness_by_sample(champ_out, s).cpu().numpy()
+            #hist_ydata = (Forward.fitness_by_sample(champ_out, s) - self.custom_loss_1(w,wp,gn,gen)).cpu().numpy()
             self.hist_plot.append(hist_ydata)
             ax.hist(hist_ydata, bins=np.arange(0,5,0.05))
             #ax.set_xticks([0,0.1,0.3,0.5,0.8,1,2,5,10,20,50])
@@ -272,3 +311,33 @@ class GPUWorker(object):
 
             self.writer.add_figure("{}_Histogram".format(gen), fig)
             plt.close()
+
+    def custom_loss_1(self,w0,wp,g, gen):
+        custom_loss = 0
+        if w0 is not None:
+            freq_mean = (self.flags['freq_low'] + self.flags['freq_high']) / 2
+            freq_range = (self.flags['freq_high'] - self.flags['freq_low']) / 2
+            custom_loss += torch.sum(torch.relu(torch.abs(w0 - freq_mean) - freq_range),1)
+        if g is not None:
+            if gen is not None and gen < 100:
+                custom_loss += torch.sum(torch.relu(-g + 0.05),1)
+            else:
+                custom_loss += 100 * torch.sum(torch.relu(-g),1)
+        if wp is not None:
+            custom_loss += 100 * torch.sum(torch.relu(-wp),1)
+        return custom_loss
+
+    def custom_loss(self,w0,wp,g, gen):
+        custom_loss = 0
+        if w0 is not None:
+            freq_mean = (self.flags['freq_low'] + self.flags['freq_high']) / 2
+            freq_range = (self.flags['freq_high'] - self.flags['freq_low']) / 2
+            custom_loss += torch.sum(torch.relu(torch.abs(w0 - freq_mean) - freq_range))
+        if g is not None:
+            if gen is not None and gen < 100:
+                custom_loss += torch.sum(torch.relu(-g + 0.05))
+            else:
+                custom_loss += 100 * torch.sum(torch.relu(-g))
+        if wp is not None:
+            custom_loss += 100 * torch.sum(torch.relu(-wp))
+        return custom_loss

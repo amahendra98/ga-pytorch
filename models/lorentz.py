@@ -82,11 +82,12 @@ class network_model(nn.Module):
 
     @staticmethod
     def fitness_f(x, y, err_ceil=100):
-        loss = torch.pow(torch.sub(x, y), 2)
-        s0, s1 = loss.size()
-        s = s0 * s1
-        loss = torch.sum(loss)
-        loss = torch.div(loss, s)
+        loss = torch.nn.functional.mse_loss(x,y)
+        #loss = torch.pow(torch.sub(x, y), 2)
+        #s0, s1 = loss.size()
+        #s = s0 * s1
+        #loss = torch.sum(loss)
+        #loss = torch.div(loss, s)
         loss[loss != loss] = err_ceil
         return torch.neg(loss)
 

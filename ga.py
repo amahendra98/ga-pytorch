@@ -37,7 +37,7 @@ class GA:
         ' Genetic Algorithm starts running here '
 
         'Ideally get rid of while loop and turn it into recursive gpu calls without cpu interference'
-        i = 976
+        i = 0
         start = time.time()
         while(i<self.max_gen):
             for w in self.workers: w.run(i)

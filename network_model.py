@@ -54,9 +54,13 @@ class Forward(nn.Module):
         '''
 
         #bn version
-        w0 = F.relu(self.bn_w0(self.lin_w0(F.relu(out)))).unsqueeze(2) * 1 # size -> [1024,4,1]
-        wp = F.relu(self.bn_wp(self.lin_wp(F.relu(out)))).unsqueeze(2) * 1
-        g = F.relu(self.bn_g(self.lin_g(F.relu(out)))).unsqueeze(2) * 0.1
+        w0_n = F.relu(self.bn_w0(self.lin_w0(F.relu(out)))) # size -> [1024,4,1]
+        wp_n = F.relu(self.bn_wp(self.lin_wp(F.relu(out))))
+        g_n = F.relu(self.bn_g(self.lin_g(F.relu(out))))
+
+        w0 = w0_n.unsqueeze(2)*1
+        wp = wp_n.unsqueeze(2)*1
+        g = g_n.unsqueeze(2)*0.1
 
         #w0 = F.relu(self.lin_w0(F.relu(out))).unsqueeze(2) * 1 # size -> [1024,4,1]
         #wp = F.relu(self.lin_wp(F.relu(out))).unsqueeze(2) * 1
@@ -73,25 +77,47 @@ class Forward(nn.Module):
         w = torch.arange(0.5, 5, (5 - 0.5) / 300, device=w0.device)
         w_expand = w.expand_as(g)
 
-        e2 = div(mul(pow(wp, 2), mul(w_expand, g)),
-        add(pow(add(pow(w0, 2), -pow(w_expand, 2)), 2), mul(pow(w_expand, 2), pow(g, 2))))
+        num = mul(pow(wp, 2), mul(w_expand, g))
+        denom = add(pow(add(pow(w0, 2), -pow(w_expand, 2)), 2), mul(pow(w_expand, 2), pow(g, 2)))
+        # denom = scale_grad.apply(denom)
+        #constrained_denom = add(denom, 0.5)
+        #e2 = div(num, constrained_denom)
+        e2 = div(num,denom)
 
         e2 = torch.sum(e2, 1)
         T = e2.float()
-        return T #, (w0[0],wp[0],g[0]) #For just one lorentzian
+        return T, w0_n,wp_n,g_n
 
     @staticmethod
     def fitness_f(x, y, err_ceil=100):
-        loss = torch.pow(torch.sub(x, y), 2)
-        s0, s1 = loss.size()
-        s = s0 * s1
-        loss = torch.sum(loss)
-        loss = torch.div(loss, s)
+    # Scaled Loss implementation scales to mean area
+        #loss = torch.sub(x, y)
+        #max_arr = torch.max(y,1)[0].unsqueeze(1)
+        #max_arr.expand_as(loss)
+        #loss = torch.mul(torch.div(loss,max_arr),10)
+        #loss = torch.pow(loss,2)
+        #loss = torch.mean(loss)
+
+        # MSE Loss
+        #oss = torch.nn.functional.mse_loss(x, y)
+
+        # Cross Entropy Loss
+        y = torch.argmax(y, 1)
+        loss = torch.nn.functional.cross_entropy(x,y.long())
+    # Toss out NaN Values
         loss[loss != loss] = err_ceil
         return torch.neg(loss)
 
     @staticmethod
-    def fitness_by_sample(x,y, err_ceil=100):
+    def fitness_by_sample(x,y):
+    # Scaled Loss implementation scales to mean area
+        #loss = torch.sub(x, y)
+        #max_arr = torch.max(y,1)[0].unsqueeze(1)
+        #max_arr.expand_as(loss)
+        #loss = torch.mul(torch.div(loss,max_arr),10)
+        #loss = torch.pow(loss,2)
+        #loss = torch.mean(loss,1)
+    # MSE Loss
         loss = torch.pow(torch.sub(x, y), 2)
         loss = torch.div(torch.sum(loss,1), 300)
         return loss

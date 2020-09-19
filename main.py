@@ -21,9 +21,9 @@ def main(argv):
 
     parser.add_argument('--device', type=str, help='Device list for model storage', default = ['cuda:1'])
 
-    parser.add_argument('--pop-size', type=int, help='Population size.', default=2000)
+    parser.add_argument('--pop-size', type=int, help='Population size.', default=1000)
 
-    parser.add_argument('--generations', type=int, default=2005, metavar='N',
+    parser.add_argument('--generations', type=int, default=1005, metavar='N',
                             help='number of generations to train (default: 1000)')
 
     parser.add_argument('--top', type=int, default=30, metavar='N',
@@ -32,7 +32,7 @@ def main(argv):
     parser.add_argument('--trunc-threshold', type=int, default=0,
                             help='Fraction of models that survive each generation')
 
-    parser.add_argument('--mutation-power', type=float, help="Mutation Power", default = 0.02)
+    parser.add_argument('--mutation-power', type=float, help="Mutation Power", default = 100)
 
     parser.add_argument('--num-batches', type=int, help='Number of batches of trianing data', default = 1)
 
