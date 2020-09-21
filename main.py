@@ -19,22 +19,28 @@ def main(argv):
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--device', type=str, help='Device list for model storage', default = ['cuda:0'])
+    parser.add_argument('--device', type=str, help='Device list for model storage', default = ['cuda:1'])
 
-    parser.add_argument('--pop-size', type=int, help='Population size.', default=200)
+    parser.add_argument('--pop-size', type=int, help='Population size.', default=2000)
 
-    parser.add_argument('--generations', type=int, default=102, metavar='N',
+    parser.add_argument('--generations', type=int, default=500, metavar='N',
                             help='number of generations to train (default: 1000)')
 
-    parser.add_argument('--top', type=int, default=0, metavar='N',
+    parser.add_argument('--top', type=int, default=30, metavar='N',
                             help='numer of top elites that should be re-evaluated')
 
-    parser.add_argument('--trunc-threshold', type=int, default=.1,
+    parser.add_argument('--trunc-threshold', type=int, default=0,
                             help='Fraction of models that survive each generation')
 
     parser.add_argument('--mutation-power', type=float, help="Mutation Power", default = 0.02)
 
+    parser.add_argument('--novelty-weight', type=float, help="Factor multiplying Novelty Score for fitness", default=1000)
+
+    parser.add_argument('--loss-weight', type=float, help="Factor multiplying negative Loss for fitness", default=0)
+
     parser.add_argument('--num-batches', type=int, help='Number of batches of trianing data', default = 1)
+
+    parser.add_argument('--insertion', type=float, help="Insertion Probability", default = 0.01)
 
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                             help='random seed (default: 1)')
@@ -58,7 +64,7 @@ def main(argv):
 
     ' GA Class handles genetic algorithm, initialize with appropriate parameters '
     ga = GA(args.top, args.pop_size,args.device, args.trunc_threshold, args.num_batches, args.mutation_power,
-            args.generations)
+            args.generations, args.loss_weight, args.novelty_weight, args.insertion)
 
     ' Do training '
     ga.run("{0}_".format(args.seed), args.folder ) #pop_size, num_gens

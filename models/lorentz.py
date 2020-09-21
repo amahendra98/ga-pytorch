@@ -79,13 +79,20 @@ class lorentz_model(nn.Module):
 
     @staticmethod
     def bc_func(z, steps, dev): #For single lorentzian only
+        l = []
+        for mp in z.parameters():
+            l.append(mp)
+        return torch.cat((l[0],l[1].unsqueeze(1),l[2],l[3].unsqueeze(1),l[4][0].unsqueeze(1),l[5][0].unsqueeze(1),l[6][0].unsqueeze(1)), 1)
+    ''' Lorentzian version
         (w0, wp, g) = z
         base = int(len(w0)/steps)
         rem = len(w0)%steps
 
-        w0.squeeze()
-        wp.squeeze()
-        g.squeeze()
+        #print(base,rem,w0)
+
+        #w0.squeeze()
+        #wp.squeeze()
+        #g.squeeze()
 
         placeholder = 1
         if rem == 0:
@@ -103,4 +110,4 @@ class lorentz_model(nn.Module):
             n[2][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
 
         return n
-
+    '''
