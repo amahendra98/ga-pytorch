@@ -15,7 +15,8 @@ K_NEAREST = 0.001
 'Training Parameters'
 SEED = 1234
 (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
-FOLDER = 'results/two_p/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
+#FOLDER = 'results/two_p/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
+FOLDER = '/work/amm163/results/sweep03'
 DEVICE_LIST = ['cuda:1']
 
 'Gif Parameters'
