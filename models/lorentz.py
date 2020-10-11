@@ -7,14 +7,14 @@ import numpy as np
 
 
 class lorentz_model(nn.Module):
-    def __init__(self,model_flags):
+    def __init__(self):
         super(lorentz_model,self).__init__()
 
-        self.linear = model_flags['linear']
-        self.num_spec_point = model_flags['num_spec_point']
-        self.num_lorentz_osc = model_flags['num_lorentz_osc']
-        self.freq_low = model_flags['freq_low']
-        self.freq_high = model_flags['freq_high']
+        self.linear = [2,100,100]
+        self.num_spec_point = 300
+        self.num_lorentz_osc = 1
+        self.freq_low = 0.5
+        self.freq_high = 5
 
         self.linears = nn.ModuleList([])
         #self.bn_linears = nn.ModuleList([])
@@ -30,13 +30,6 @@ class lorentz_model(nn.Module):
     def forward(self, G):
         out = G
         out = self.linears[1](F.relu(self.linears[0](out))) #GPU Optimized forward maybe?
-        '''
-        for ind, fc in enumerate(self.linears):
-            if ind < len(self.linears) - 0:
-                out = F.relu(fc(out))
-            else:
-                out = fc(out)
-        '''
 
         w0 = F.relu(self.lin_w0(F.relu(out)))
         wp = F.relu(self.lin_wp(F.relu(out)))
@@ -49,10 +42,6 @@ class lorentz_model(nn.Module):
         w0 = w0.unsqueeze(2) * 1  # size -> [1024,4,1]
         wp = wp.unsqueeze(2) * 1
         g = g.unsqueeze(2) * 0.1
-        # g = torch.sigmoid(self.lin_g(out).unsqueeze(2))
-
-        # Expand them to the make the parallelism, (batch_size, #Lor, #spec_point)
-        # self.lin_g.weight.size() = (num_lorent_osc,linear[-1])
 
         w0 = w0.expand(out.size(0), self.lin_g.weight.size(0), 300)  # size -> [1024,4,300]
         wp = wp.expand_as(w0)
@@ -67,47 +56,23 @@ class lorentz_model(nn.Module):
         T = e2.float()
         return T, (w0_out,wp_out,g_out) #For just one lorentzian
 
-    @staticmethod
-    def fitness_f(x, y, err_ceil=100):
-        loss = torch.pow(torch.sub(x, y), 2)
-        s0, s1 = loss.size()
-        s = s0 * s1
-        loss = torch.sum(loss)
-        loss = torch.div(loss, s)
-        loss[loss != loss] = err_ceil
-        return torch.neg(loss)
+    def collect_mutations(self, mut, num, dev):
+        RAND = []
+        for p in self.parameters():
+            s = p.size()
+            if len(s) == 1:
+                RAND.append(torch.mul(torch.randn(num,s[0],requires_grad=False,device=dev), mut))
+            if len(s) == 2:
+                RAND.append(torch.mul(torch.randn(num,s[0],s[1],requires_grad=False, device=dev), mut))
+        return RAND
 
     @staticmethod
-    def bc_func(z, steps, dev): #For single lorentzian only
+    def bc_func(z): #For single lorentzian only
         l = []
         for mp in z.parameters():
             l.append(mp)
-        return torch.cat((l[0],l[1].unsqueeze(1),l[2],l[3].unsqueeze(1),l[4][0].unsqueeze(1),l[5][0].unsqueeze(1),l[6][0].unsqueeze(1)), 1)
-    ''' Lorentzian version
-        (w0, wp, g) = z
-        base = int(len(w0)/steps)
-        rem = len(w0)%steps
+        return torch.cat((l[0],l[1].unsqueeze(1),l[2],l[3].unsqueeze(1),l[4][0].unsqueeze(1),l[5][0].unsqueeze(1),
+                          l[6][0].unsqueeze(1)), 1)
 
-        #print(base,rem,w0)
-
-        #w0.squeeze()
-        #wp.squeeze()
-        #g.squeeze()
-
-        placeholder = 1
-        if rem == 0:
-            placeholder = 0
-
-        n = torch.zeros(3,placeholder+base*steps,device=dev)
-
-        n[0][0] = torch.mean(w0[0:rem])
-        n[1][0] = torch.mean(wp[0:rem])
-        n[2][0] = torch.mean(g[0:rem])
-
-        for i in range(base):
-            n[0][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
-            n[1][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
-            n[2][i+1] = torch.mean(w0[rem + i * steps: rem + (i + 1) * steps])
-
-        return n
-    '''
+    def p_list(self):
+        return lorentz_model.bc_func(self).cpu().numpy()

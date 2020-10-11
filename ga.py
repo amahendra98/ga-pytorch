@@ -1,22 +1,19 @@
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-import matplotlib.patches as patches
-import matplotlib.path as path
+import flag_reader
+import torch
 import numpy as np
 import time
+from scatter_animator import Scatter_Animator
 
 class GA:
-    def __init__(self, top, pop_size, devices, trunc, batches, mut,maxgen,lw,nw,p):
-        '''
-        Constructor loads parameters, loads data and models onto each device
-        '''
-        self.model_flags = {'linear' : [2, 100, 100], 'num_spec_point' : 300, 'num_lorentz_osc' : 1,
-                            'freq_low' : 0.5,'freq_high' : 5}
-        self.max_gen = maxgen
-
-        ' Block used if GPU Sharing works in OOP manner '
-        #' Truncation divisible by two '
-        #self.truncation_threshold = int(pop_size*trunc) + 1  #Should be dividable by two
+    def __init__(self, flags):
+        self.flags = flags
+        self.max_gen = flags.generations
+        devices = flags.device[0]
+        pop_size = flags.pop_size
+        self.time = flags.gif_time
+        self.x_lim = flags.x_lim
+        self.y_lim = flags.y_lim
+        self.name = flags.folder
 
         ' Divide population amongst GPUs and store how many models on each GPU '
         pop_per_device = int( pop_size/len(devices ))
@@ -28,95 +25,62 @@ class GA:
         from train import GPUWorker
 
         self.devices = devices #Creating single gpu version first
-        self.workers = [GPUWorker(dev,self.pop_array[i],batches,top,trunc, mut, self.model_flags,maxgen,lw,nw,p)
-                        for i, dev in enumerate(devices)]
+        self.worker = GPUWorker(devices,pop_size,flags.num_batches,flags.top,flags.trunc_threshold,flags.mutation_power, self.max_gen,
+                                  flags.loss_weight,flags.novelty_weight,flags.insertion,flags.k,flags.folder)
 
-
-    def run(self, filename, folder):
-
-        ' Genetic Algorithm starts running here '
-
-        'Ideally get rid of while loop and turn it into recursive gpu calls without cpu interference'
-        i = 0
-
+    def run(self):
+        self.worker.rmem = None
+        gz = 0
         start = time.time()
-        while(i<self.max_gen):
-            for w in self.workers: w.run(i)
-            i += 1
-            print("gen: ",i)
+        while(gz<self.max_gen):
+            self.worker.run(gz)
+            print("Gen: ", gz,"\t arcv length: ",self.worker.arcv_idx)
+            gz += 1
         end = time.time()
+        print("Time elapsed: ", end-start)
 
-        print("Time Elapsed: ", end - start)
+        pop = np.array(self.worker.mp_gen)
+        elite_idx = np.array(self.worker.mpe_gen_idx)
+        arcv_mod = np.array(self.worker.arcv_mod)
+        arcv_term_idx = np.array(self.worker.arcv_term_idx)
 
-        fig = plt.figure()
-        lines = []
-        for i in range(1,5):
-            ax = fig.add_subplot(1, 4, i)
-            ax.set(xlim=(0,5),ylim=(0,self.workers[0].lorentz_plot[(i*4) + 3].max() + 1))
-            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4)], color='tab:blue',label='Champion')[0])
-            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 1], color='tab:purple',label='worst elite')[0])
-            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 2], color='tab:red', label='worst')[0])
-            lines.append(ax.plot(np.linspace(0.5, 5, 300), self.workers[0].lorentz_plot[(i*4) + 3], color='tab:orange', label='Truth Spectra')[0])
-        plt.legend()
-        plt.xlabel("Frequency (THz)")
-        plt.ylabel("e2")
+        with torch.no_grad():
+            avg_top = []
+            amass = [np.zeros_like(self.worker.models[0].p_list())]
+            for i in range(len(self.worker.avg_tops)):
+                amass += self.worker.avg_tops[i]
+                avg_top.append(amass/(i+1))
 
+            furthest = self.worker.furthest_model
 
-        n,bins = np.histogram(self.workers[0].hist_plot[0],bins=np.arange(0,5,0.05))
+            distance_metric = []
+            for i in range(len(avg_top)):
+                distance_metric.append(np.sqrt(np.linalg.norm(avg_top[i])/np.linalg.norm(furthest[i]/2)))
 
-        left = np.array(bins[:-1])
-        right = np.array(bins[1:])
-        bottom = np.zeros(len(left))
-        top = bottom + n
-        nrects = len(left)
+            distance_metric = np.array(distance_metric)
 
-        nverts = nrects * (1 + 3 + 1)
-        verts = np.zeros((nverts, 2))
-        codes = np.ones(nverts, int) * path.Path.LINETO
-        codes[0::5] = path.Path.MOVETO
-        codes[4::5] = path.Path.CLOSEPOLY
-        verts[0::5, 0] = left
-        verts[0::5, 1] = bottom
-        verts[1::5, 0] = left
-        verts[1::5, 1] = top
-        verts[2::5, 0] = right
-        verts[2::5, 1] = top
-        verts[3::5, 0] = right
-        verts[3::5, 1] = bottom
+            avg_top = np.squeeze(np.array(avg_top))
+            furthest = np.squeeze(np.array(furthest))
 
-        def animate_lorentz(i):
-            for j, line in enumerate(lines):
-                line.set_ydata(self.workers[0].lorentz_plot[j + (i*16)])
+            np.savez(self.name+"/pop", pop)
+            np.savez(self.name+"/elite_idx",elite_idx)
+            np.savez(self.name+"/arcv_mod",arcv_mod)
+            np.savez(self.name+"/arcv_term_idx", arcv_term_idx)
+            np.savez(self.name+"/avg_top", avg_top)
+            np.savez(self.name+"/furthest", furthest)
 
-        Lorentz_animation = FuncAnimation(fig, animate_lorentz, interval=200, frames=100)
-        Lorentz_animation.save('Lorentz_{}.gif'.format(start), writer='imagemagick')
+            """
+            for j in range(len(self.worker.mut_gen_idx)):
+                d = self.name+"/mutates/gen_{}".format(j)
+                for l in range(len(self.worker.mut_gen_idx[j])):
+                    dir = d + "_elite_{}".format(l)
+                    np.savez(dir,self.worker.mut_gen_idx[j][l])
+            """
 
+            flag_reader.write_flags_and_BVE(self.flags,distance_metric,self.name)
 
-        patch = None
-        def animate_histogram(i):
-            n, bins = np.histogram(self.workers[0].hist_plot[i], bins=np.arange(0,5,0.05))
-            top = bottom + n
-            verts[1::5, 1] = top
-            verts[2::5, 1] = top
-            return [patch, ]
-
-        fig, ax = plt.subplots()
-        barpath = path.Path(verts, codes)
-        patch = patches.PathPatch(
-            barpath, facecolor='blue', edgecolor='purple', alpha=0.5)
-        ax.add_patch(patch)
-
-        ax.set_xlim(left[0], right[-1])
-        #ax.set_xticks([0, 0.1, 0.3, 0.5, 0.8, 1, 2, 5, 10, 20, 50])
-        #ax.set_xscale('log')
-        ax.set_ylim(bottom.min(), 2*top.max())
-        ax.set_xlabel("MSE_Loss")
-        ax.set_ylabel("Number of datasets")
-
-        Histogram_animation = FuncAnimation(fig, animate_histogram, 100, repeat=False, blit=True)
-        Histogram_animation.save('Histogram_{}.gif'.format(start), writer='imagemagic')
-
-        plt.draw()
+            #s = Scatter_Animator(name,self.time,self.x_lim,self.y_lim)
+            #s.animate()
 
 
 '''

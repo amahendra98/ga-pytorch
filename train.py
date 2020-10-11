@@ -1,15 +1,16 @@
 import torch
 from models import lorentz_model
+from models import two_p_model
+from models import iris_model
 import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import matplotlib.pyplot as plt
 import time
-import copy
 
 class GPUWorker(object):
     ' Object exists on each GPU and handles individual GPU training '
-    def __init__(self,device,pop,batches,top,trunc,mut,model_flags,maxgen,lw,nw,prob):
+    def __init__(self,device,pop,batches,top,trunc,mut,maxgen,lw,nw,prob,k,folder):
         ' Constructor downloads parameters and allocates memory for models and data'
         print("LOSS WEIGHT: ",lw, "NOVELTY WEIGHT",nw)
         # User specified parameters
@@ -18,7 +19,7 @@ class GPUWorker(object):
         self.novelty_weight = torch.tensor([nw], device=self.device) # Determines how much importance novelty has vs. fitness in ga
         self.loss_weight = torch.tensor([lw], device=self.device)
         self.BC_dim = 5 # Number of BC params equals BC_dim * 3 * num_lorentz oscillators
-        self.k = 25 # kth nearest neighbors in novelty calculation
+        self.k = int(pop*k) # kth nearest neighbors in novelty calculation
         self.num_models = pop
         self.num_batches = batches
         self.mut = mut
@@ -30,8 +31,7 @@ class GPUWorker(object):
         else:
             raise Exception("Either top or trunc must equal 0, but never both")
 
-        (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
-        self.writer = SummaryWriter("results/top{}_insrt{}_lw{}_nw{}_{}{}{}_{}{}{}".format(top,prob,lw,nw,y,m,d,hr,min,s))
+        self.writer = SummaryWriter(folder)
 
         # Parameters to hold memory
         self.models = []
@@ -43,25 +43,36 @@ class GPUWorker(object):
         self.sorted = torch.zeros(pop, device=self.device)
         self.novelty = torch.zeros(pop, device=self.device)
         self.Archive = []
-        print('Memory after basic arrays initialization: ', torch.cuda.memory_allocated('cuda:1')/1000000000)
+        # For 2D parameter scatter animations
+        self.mp_gen = [] #Hold model parameters of population for generation
+        self.mpe_gen_idx = [] #Holds indices in mp_gen that correspond to elites for generation
+        #self.mut_gen_idx = [] #Per generation holds per elite model index in mge_gen_idx parameters of mutated versions
+        self.arcv_mod = [] #Holds archived indices in mp_gen that correspond to archived models
+        self.arcv_term_idx = []
+
+        print('Memory after basic arrays initialization: ', torch.cuda.memory_allocated(device)/1000000000)
 
         # BC of population is a list of tensors
-        self.BC_pop = torch.empty(pop,1,100,107, device=self.device)
-        print('Memory after BC_pop initialization: ', torch.cuda.memory_allocated('cuda:1')/1000000000)
+        self.BC_pop = torch.empty(pop,1,100,107, device=self.device)  #100,107 ; #2,1 ;  #3, 9
+        print('Memory after BC_pop initialization: ', torch.cuda.memory_allocated(device)/1000000000)
 
         # BC of archive members (arcv_idx tracks end of list as the arcv grows with time)
-        # Pre-initialized to be 5% larger than statistically predicted
-        self.BC_arcv = torch.empty(1,int(pop*self.insertion_probability*maxgen*1.05),100,107, device=self.device)
-        self.buf = torch.empty_like(self.BC_arcv[0])
+        # Pre-initialized to be 2% larger than statistically predicted, currently 100% larger
+        self.BC_arcv = torch.empty(1,int(pop*self.insertion_probability*maxgen*1.02),100,107, device=self.device) #2,1 ; #100,107
+        self.buf = torch.empty(self.num_models,100,107,device=self.device)
         self.arcv_idx = 0
 
-        print('Memory after BC_arcv initialization: ',torch.cuda.memory_allocated('cuda:1')/1000000000)
+        print('Memory after BC_arcv initialization: ',torch.cuda.memory_allocated(device)/1000000000)
 
         ' Model generation '
-        for i in range(pop):
-            self.models.append(lorentz_model(model_flags).cuda(self.device))
+        with torch.no_grad():
+            for i in range(pop):
+                self.models.append(lorentz_model().cuda(self.device))
 
-        print('Memory after model initialization: ', torch.cuda.memory_allocated('cuda:1')/1000000000)
+            self.furthest_model = [np.zeros_like(self.models[0].p_list())]
+            self.avg_tops = []
+
+        print('Memory after model initialization: ', torch.cuda.memory_allocated(device)/1000000000)
 
         ' Data Loading '
         train_data_loader, test_data_loader = datareader.read_data(x_range=[i for i in range(0, 2)],
@@ -79,22 +90,44 @@ class GPUWorker(object):
         for i, (geometry, spectra) in enumerate(test_data_loader):
             self.test_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
-        print('Memory after data loading: ', torch.cuda.memory_allocated('cuda:1')/1000000000)
+        print('Memory after data loading: ', torch.cuda.memory_allocated(device)/1000000000)
+
+        'Allocate additional memory if not enough reserved'
+        self.rmem = None
+        if torch.cuda.memory_reserved(device)/1000000000 <= 9.5:
+            print("IF NOT SKIPPED")
+            mem = torch.cuda.memory_allocated(device)
+            mem_av = 9.5*1000000000
+            mem_block = (mem_av - mem)/1000000
+            self.rmem = torch.empty((256,1024,int(mem_block)), device=self.device)
+
+        print('Memory after blocking additional memory: ', torch.cuda.memory_allocated(device)/1000000000)
+        print('Memory Reserved: ', torch.cuda.memory_reserved(device) / 1000000000)
+
 
     def run(self, gen):
         ' Method manages the run on a single gpu '
-
         with torch.no_grad():
+            self.mp_gen.append([])
+            self.mpe_gen_idx.append([])
+            #self.mut_gen_idx.append([])
+            self.avg_tops.append(np.zeros_like(self.models[0].p_list()))
+
+            #for i in range(self.trunc_threshold):
+            #    self.mut_gen_idx[gen].append([])
+
+
             ' Queue every calculation of fitness for each model on GPU '
             # Generate array of random indices corresponding to each batch for each model
             rand_batch = np.random.randint(self.num_batches,size=self.num_models)
             for j in range(self.num_models):
                 g, s = self.train_data[rand_batch[j]]
                 fwd, bc = self.models[j](g)
-                self.neg_loss[j] = lorentz_model.fitness_f(fwd,s)
+                self.neg_loss[j] = self.fitness_f(fwd,s)
                 # calculate and store Behavior Characteristic of each model
                 bc = self.models[j] #added for sake of BC=model
-                self.BC_pop[j][0] = lorentz_model.bc_func(bc,self.BC_dim,self.device)
+                self.mp_gen[gen].append(bc.p_list())
+                self.BC_pop[j][0] = lorentz_model.bc_func(bc)
 
             ' Calculate Novelty Score for each model and add novetly score to fitness score '
             # self.novelty_f loads novelty scores into self.novelty and moves to archive
@@ -106,14 +139,18 @@ class GPUWorker(object):
             insrt_bools = np.random.random(size=self.num_models) < self.insertion_probability
 
             # Translate bool array into an array of indices and for loop through these indices
-            for i in np.linspace(0,self.num_models-1,self.num_models,dtype=np.int32)[insrt_bools]:
+            for i in range(0,self.num_models):
+                if insrt_bools[i] == 0:
+                    continue
                 # Copy and append selected models into archive
                 self.Archive.append(self.models[i])
+                self.arcv_mod.append(self.models[i].p_list())
 
                 # self.BC_pop stores population info, appended BCs belong to models in the archive
                 # Append the BC's of models added to archive to self.BC
                 self.BC_arcv[0][self.arcv_idx] = self.BC_pop[i]
                 self.arcv_idx += 1
+            self.arcv_term_idx.append(self.arcv_idx)
 
             ' Wait for every kernel queued to execute '
             torch.cuda.synchronize(self.device)
@@ -121,6 +158,9 @@ class GPUWorker(object):
             ' Get sorting based off of fitness array, this function is gpu optimized '
             # Sorted is a tensor of indices organized from best to worst model
             self.sorted = torch.argsort(self.fitness, descending=True)
+            self.sorted = torch.argsort(self.fitness, descending=True)
+
+            self.mpe_gen_idx[gen] = self.sorted[0:self.trunc_threshold].cpu().numpy()
             self.writer.add_scalar('training values of pure negative mseloss over generation', self.neg_loss[self.sorted[0]],gen)
             self.writer.add_scalar('training values of 1000 * novelty score over generation', 1000*self.novelty[self.sorted[0]],gen)
             self.writer.add_scalar('training values of fitness function over generation', self.fitness[self.sorted[0]], gen)
@@ -150,7 +190,7 @@ class GPUWorker(object):
 
             ' Copy models over truncation barrier randomly into bottom models w/ mutation '
             # Generate array of random indices corresponding to models above trunc barrier, and collect mutation arrays
-            rand_model_p = self.collect_random_mutations()
+            rand_model_p = self.models[0].collect_mutations(self.mut,self.num_models,self.device)
             rand_top = np.random.randint(self.trunc_threshold, size=self.num_models - self.trunc_threshold)
             for i in range(self.trunc_threshold,self.num_models):
                 # Grab all truncated models
@@ -163,54 +203,42 @@ class GPUWorker(object):
                     # Copy top model parameters chosen into bottom module and mutate with random tensor of same size
                     # New random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                     mp.copy_(mtp).add_(mut[i])
+                #self.mut_gen_idx[gen][rand_top[i-self.trunc_threshold]].append(m.p_list())
 
             ' Mutate top models that are not champion '
             for i in range(1,self.trunc_threshold):
                 # Mutate all elite models except champion
+                m = self.models[self.sorted[i]]
+                m_cpu = m.p_list()
+                self.avg_tops[gen] += m_cpu
+                if np.linalg.norm(m_cpu) > np.linalg.norm(self.furthest_model[gen]):
+                    self.furthest_model[gen] = m_cpu
                 for (mp,mut) in zip(m.parameters(),rand_model_p):
                     # Add random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                     mp.add_(mut[i])
+                #self.mut_gen_idx[gen][i].append(m.p_list())
+
+            m = self.models[self.sorted[0]]
+            m_cpu = m.p_list()
+            self.avg_tops[gen] += m_cpu
+            if np.linalg.norm(m_cpu) > np.linalg.norm(self.furthest_model[gen]):
+                self.furthest_model[gen] = m_cpu
+
+            self.avg_tops[gen] = self.avg_tops[gen]/self.trunc_threshold
+            self.furthest_model.append(self.furthest_model[gen])
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-            self.save_plots(gen,plot_arr=[0,9,90])
+            #self.save_plots(gen,plot_arr=[0,9,90])
 
-
-    def collect_random_mutations(self):
-        ' Pre-loads mutation arrays so that rand is not called in for loop multiple times '
-
-        rand_model_p = []
-
-        rand_lay_1 = torch.mul(torch.randn(self.num_models, 100, 2, requires_grad=False, device=self.device),
-                                   self.mut)
-        rand_model_p.append(rand_lay_1)
-
-        rand_bi_1 = torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
-                                  self.mut)
-        rand_model_p.append(rand_bi_1)
-
-        rand_lay_2 = torch.mul(torch.randn(self.num_models, 100, 100, requires_grad=False, device=self.device),
-                                   self.mut)
-        rand_model_p.append(rand_lay_2)
-
-        rand_bi_2 = torch.mul(torch.randn(self.num_models, 100, requires_grad=False, device=self.device),
-                                  self.mut)
-        rand_model_p.append(rand_bi_2)
-
-        rand_lin_g = torch.mul(torch.randn(self.num_models, 1, 100, requires_grad=False, device=self.device),
-                                   self.mut)
-        rand_model_p.append(rand_lin_g)
-
-        rand_lin_w0 = torch.mul(torch.randn(self.num_models, 1, 100, requires_grad=False, device=self.device),
-                                    self.mut)
-        rand_model_p.append(rand_lin_w0)
-
-        rand_lin_wp = torch.mul(torch.randn(self.num_models, 1, 100, requires_grad=False, device=self.device),
-                                    self.mut)
-        rand_model_p.append(rand_lin_wp)
-
-        return rand_model_p
-
+    def fitness_f(self, x, y, err_ceil=100):
+        loss = torch.pow(torch.sub(x, y), 2)
+        s0, s1 = loss.size()
+        s = s0 * s1
+        loss = torch.sum(loss)
+        loss = torch.div(loss, s)
+        loss[loss != loss] = err_ceil
+        return torch.neg(loss)
 
     def save_plots(self,gen,rate=20,plot_arr=[0,9,90]):
         ' Plots champion, worst elite, and worst graph against each graph indexed from the raw training data '
@@ -236,7 +264,7 @@ class GPUWorker(object):
     def novelty_f(self, gen):
         ' Calculates novelty score of all models in one function '
         # Elements in model
-        tot = 101*107
+        tot = 10700 #2, #10700 #27
 
         distances = torch.empty((self.num_models,self.num_models+self.arcv_idx), device=self.device)
 
@@ -261,13 +289,14 @@ class GPUWorker(object):
 
             self.arcv_idx -= ret
 
-            for i in range(self.num_models):
-                self.buf = torch.sub(BC_arcv_Table_pop[i], BC_arcv_Table_arcv[i])
-                distances[i][self.num_models:self.num_models+self.arcv_idx] = torch.div(torch.sum(torch.pow(self.buf,2),(1,2)),tot)
-
+            for i in range(self.arcv_idx):
+                self.buf = torch.sub(BC_arcv_Table_pop[:,i],BC_arcv_Table_arcv[:,i])
+                distances[:,i+self.num_models] = torch.div(torch.sum(torch.pow(self.buf,2),(1,2)),tot)
+            self.writer.add_scalar("Archive Variance",
+                                   torch.div(torch.sum(torch.narrow(distances,1,self.num_models,self.arcv_idx)), 2*(self.arcv_idx^2)), gen)
             self.writer.add_scalar(
-                'Total Novelty in population Models Against those in Archive or Novelty of Archive against population',
-                torch.sum(torch.narrow(distances, 1, self.num_models, self.arcv_idx)), gen)
+                'Average Novelty in population Models Against those in Archive or Novelty of Archive against population',
+                torch.mean(torch.narrow(distances, 1, self.num_models, self.arcv_idx)), gen)
 
         # Sort all and extra novelty score based on mean of k nearest neighbors
         d_sort, idx = torch.sort(distances)
@@ -277,6 +306,6 @@ class GPUWorker(object):
         self.novelty = torch.mean(neighbors,1)
 
         self.writer.add_scalar('Total Novelty of population Against all Models in Population and Archive', torch.sum(distances), gen)
-        self.writer.add_scalar('Total Novelty Among Population in terms of nearest neighbors',torch.sum(neighbors), gen)
-        self.writer.add_scalar('Total Novelty of population Against all Other models in Population',
-                               torch.sum(torch.narrow(distances,1,0,self.num_models)), gen)
+        self.writer.add_scalar('Total Novelty Among Population in terms of nearest neighbors',torch.div(torch.sum(neighbors),self.k), gen)
+        self.writer.add_scalar('Population Variance',
+                               torch.div(torch.sum(torch.narrow(distances,1,0,self.num_models)), 2*(self.num_models^2)), gen)

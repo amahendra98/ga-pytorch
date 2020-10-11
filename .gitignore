@@ -1,7 +1,6 @@
 env/
 results/
 <<<<<<< HEAD
-toy_data/
 .idea/
 __pycache__/
 .DS_Store
@@ -11,4 +10,5 @@ __pycache__/
 .DS_Store
 toy_data/
 reserve_data/
+
 >>>>>>> master
