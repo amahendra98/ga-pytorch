@@ -14,7 +14,7 @@ export LD_LIBRARY_PATH=/opt/apps/rhel7/cudnn/lib64:$LD_LIBRARY_PATH
 export PYTHONPATH=$PYTHONPATH:/hpc/home/amm163/ga-ns/
 
 # execute my file
-python hyperswipe_03f.py
+python hyperswipe_03a.py
 # python utils/get_mask.py
 # python utils/train_test_split.py
 # python plotswipe.py

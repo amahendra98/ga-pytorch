@@ -13,10 +13,8 @@ export LD_LIBRARY_PATH=/opt/apps/rhel7/cudnn/lib64:$LD_LIBRARY_PATH
 # add my library path
 export PYTHONPATH=$PYTHONPATH:/hpc/home/amm163/ga-ns/
 
-echo This ran
-
 # execute my file
-python hyperswipe_03c.py
+python hyperswipe_03b.py
 # python utils/get_mask.py
 # python utils/train_test_split.py
 # python plotswipe.py

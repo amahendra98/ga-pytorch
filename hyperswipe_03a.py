@@ -13,7 +13,7 @@ if __name__ == '__main__':
                 for m in Mutation:
                     for k in K_Nearest:
                         count += 1
-                        if count == 1:
+                        if count <= 14:
                             continue
 
                         flags = flag_reader.read_flag()
