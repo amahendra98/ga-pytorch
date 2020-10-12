@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="ProjectModuleManager">
-    <modules>
-      <module fileurl="file://$PROJECT_DIR$/../cpu_naive/.idea/cpu_naive.iml" filepath="$PROJECT_DIR$/../cpu_naive/.idea/cpu_naive.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/ga-pytorch.iml" filepath="$PROJECT_DIR$/.idea/ga-pytorch.iml" />
-    </modules>
-  </component>
-</project>

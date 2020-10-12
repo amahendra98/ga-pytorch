@@ -4,7 +4,7 @@ import torch
 
 if __name__ == '__main__':
     device = ['cuda:1']
-    Pop = [3000,6000]
+    Pop = [2000]
 
     for p in Pop:
         f = flag_reader.read_flag()

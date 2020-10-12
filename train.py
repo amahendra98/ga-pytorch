@@ -58,7 +58,7 @@ class GPUWorker(object):
 
         # BC of archive members (arcv_idx tracks end of list as the arcv grows with time)
         # Pre-initialized to be 2% larger than statistically predicted, currently 100% larger
-        self.BC_arcv = torch.empty(1,int(pop*self.insertion_probability*maxgen*1.02),100,107, device=self.device) #2,1 ; #100,107
+        self.BC_arcv = torch.empty(1,int(pop*self.insertion_probability*maxgen*1.05),100,107, device=self.device) #2,1 ; #100,107
         self.buf = torch.empty(self.num_models,100,107,device=self.device)
         self.arcv_idx = 0
 

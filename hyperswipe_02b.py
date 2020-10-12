@@ -7,12 +7,12 @@ if __name__ == '__main__':
     #Trunc = [0.9,0.75,0.5,0.35] #0.65 already taken care of by 20000pop
     #Insertion = [0.001,0.0001] #0.05 taken care of by first pop test #0.01 successful
     #K_Nearest = [0.01,0.005,0.0005,0.0001] #0.001 taken care of by first 500 pop test
-    Pop = [4000,5000]
+    Trunc = [0.3, 0.4]
 
-    for p in Pop:
+    for t in Trunc:
         f = flag_reader.read_flag()
-        f.pop_size = p
-        f.trunc_threshold = 0.5
+        f.pop_size = 3000
+        f.trunc_threshold = t
         f.device = device
         f.folder = 'results/two_p_sweep/sweep_02/P{}_T{}_I{}_K{}'.format(f.pop_size,f.trunc_threshold,
                                                                                  f.insertion,f.k)
