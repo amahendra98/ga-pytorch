@@ -18,7 +18,7 @@ if __name__ == '__main__':
                         flags.trunc_threshold = t
                         flags.mutation_power = m
                         flags.k = k
-                        flags.device=['cuda:0']
+                        flags.device=['cuda:1']
                         flags.folder = flags.folder +"/P{}_T{}_M{}_K{}".format(p,t,m,k)
 
                         ga = GA(flags)
