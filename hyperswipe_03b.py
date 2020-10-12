@@ -7,10 +7,15 @@ if __name__ == '__main__':
     Mutation = [0.01,0.02,0.03]
     K_Nearest = [0.0005,0.001,0.005]
 
+    count = 0
     for p in Pop:
         for t in Trunc:
                 for m in Mutation:
                     for k in K_Nearest:
+                        count +=1
+                        if count <= 12:
+                            continue
+
                         flags = flag_reader.read_flag()
                         flags.pop_size = p
                         flags.trunc_threshold = t
