@@ -1,6 +1,8 @@
 from ga import GA
 import flag_reader
 
+print("THIS HAPPENED!")
+
 if __name__ == '__main__':
     Pop = [5000,4000]
     Trunc = [0.2]
