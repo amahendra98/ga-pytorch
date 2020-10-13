@@ -39,10 +39,10 @@ class GA:
         end = time.time()
         print("Time elapsed: ", end-start)
 
-        pop = np.array(self.worker.mp_gen)
-        elite_idx = np.array(self.worker.mpe_gen_idx)
-        arcv_mod = np.array(self.worker.arcv_mod)
-        arcv_term_idx = np.array(self.worker.arcv_term_idx)
+        #pop = np.array(self.worker.mp_gen)
+        #elite_idx = np.array(self.worker.mpe_gen_idx)
+        #arcv_mod = np.array(self.worker.arcv_mod)
+        #arcv_term_idx = np.array(self.worker.arcv_term_idx)
 
         with torch.no_grad():
             avg_top = []

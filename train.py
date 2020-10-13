@@ -44,11 +44,11 @@ class GPUWorker(object):
         self.novelty = torch.zeros(pop, device=self.device)
         self.Archive = []
         # For 2D parameter scatter animations
-        self.mp_gen = [] #Hold model parameters of population for generation
-        self.mpe_gen_idx = [] #Holds indices in mp_gen that correspond to elites for generation
+        #self.mp_gen = [] #Hold model parameters of population for generation
+        #self.mpe_gen_idx = [] #Holds indices in mp_gen that correspond to elites for generation
         #self.mut_gen_idx = [] #Per generation holds per elite model index in mge_gen_idx parameters of mutated versions
-        self.arcv_mod = [] #Holds archived indices in mp_gen that correspond to archived models
-        self.arcv_term_idx = []
+        #self.arcv_mod = [] #Holds archived indices in mp_gen that correspond to archived models
+        #self.arcv_term_idx = []
 
         print('Memory after basic arrays initialization: ', torch.cuda.memory_allocated(device)/1000000000)
 
@@ -108,8 +108,8 @@ class GPUWorker(object):
     def run(self, gen):
         ' Method manages the run on a single gpu '
         with torch.no_grad():
-            self.mp_gen.append([])
-            self.mpe_gen_idx.append([])
+            #self.mp_gen.append([])
+            #self.mpe_gen_idx.append([])
             #self.mut_gen_idx.append([])
             self.avg_tops.append(np.zeros_like(self.models[0].p_list()))
 
@@ -126,7 +126,7 @@ class GPUWorker(object):
                 self.neg_loss[j] = self.fitness_f(fwd,s)
                 # calculate and store Behavior Characteristic of each model
                 bc = self.models[j] #added for sake of BC=model
-                self.mp_gen[gen].append(bc.p_list())
+                #self.mp_gen[gen].append(bc.p_list())
                 self.BC_pop[j][0] = lorentz_model.bc_func(bc)
 
             ' Calculate Novelty Score for each model and add novetly score to fitness score '
@@ -144,7 +144,7 @@ class GPUWorker(object):
                     continue
                 # Copy and append selected models into archive
                 self.Archive.append(self.models[i])
-                self.arcv_mod.append(self.models[i].p_list())
+                #self.arcv_mod.append(self.models[i].p_list())
 
                 # self.BC_pop stores population info, appended BCs belong to models in the archive
                 # Append the BC's of models added to archive to self.BC
@@ -154,7 +154,7 @@ class GPUWorker(object):
                 except:
                     pass
 
-                self.arcv_term_idx.append(self.arcv_idx)
+                #self.arcv_term_idx.append(self.arcv_idx)
 
             ' Wait for every kernel queued to execute '
             torch.cuda.synchronize(self.device)
@@ -164,7 +164,7 @@ class GPUWorker(object):
             self.sorted = torch.argsort(self.fitness, descending=True)
             self.sorted = torch.argsort(self.fitness, descending=True)
 
-            self.mpe_gen_idx[gen] = self.sorted[0:self.trunc_threshold].cpu().numpy()
+            #self.mpe_gen_idx[gen] = self.sorted[0:self.trunc_threshold].cpu().numpy()
             self.writer.add_scalar('training values of pure negative mseloss over generation', self.neg_loss[self.sorted[0]],gen)
             self.writer.add_scalar('training values of 1000 * novelty score over generation', 1000*self.novelty[self.sorted[0]],gen)
             self.writer.add_scalar('training values of fitness function over generation', self.fitness[self.sorted[0]], gen)
