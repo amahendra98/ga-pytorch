@@ -7,7 +7,7 @@ import random
 
 if __name__ == '__main__':
     f = flag_reader.read_flag()
-    f.folder = 'results/two_p_sweep/sweep_02/P{}_T{}_I{}_K{}'.format(f.pop_size, f.trunc_threshold,
+    f.folder = 'results/sweeps/sweep_02/P{}_T{}_I{}_K{}'.format(f.pop_size, f.trunc_threshold,
                                                                      f.insertion, f.k)
     f.device=['cuda:0']
     print(f)

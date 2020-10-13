@@ -62,10 +62,10 @@ class GA:
             avg_top = np.squeeze(np.array(avg_top))
             furthest = np.squeeze(np.array(furthest))
 
-            np.savez(self.name+"/pop", pop)
-            np.savez(self.name+"/elite_idx",elite_idx)
-            np.savez(self.name+"/arcv_mod",arcv_mod)
-            np.savez(self.name+"/arcv_term_idx", arcv_term_idx)
+            #np.savez(self.name+"/pop", pop)
+            #np.savez(self.name+"/elite_idx",elite_idx)
+            #np.savez(self.name+"/arcv_mod",arcv_mod)
+            #np.savez(self.name+"/arcv_term_idx", arcv_term_idx)
             np.savez(self.name+"/avg_top", avg_top)
             np.savez(self.name+"/furthest", furthest)
 

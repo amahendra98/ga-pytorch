@@ -23,7 +23,15 @@ class Data_Walker():
         pre_frame = []
 
         for root,dirs,files in os.walk(self.dir):
-            for folder in dirs:
+            for file in files:
+                if file.find(".npz") != -1:
+                    if file.find("furthest")!=-1 or file.find("avg_top")!=-1:
+                        continue
+                    print(root)
+                    print(file)
+                    os.remove(root + "/" + file)
+            '''
+             for folder in dirs:
                 if folder == "imgs":
                     continue
                 if func_string.find('e') != -1:
@@ -31,8 +39,17 @@ class Data_Walker():
                 if func_string.find('h') != -1:
                     d_row = self.add_pc_data('/'+folder)
                     pre_frame.append(d_row)
-
+            '''
         return pre_frame
+
+        """
+            for file in files:
+            if file.find(".npz")!=-1:
+                print(root)
+                print(file)
+                os.remove(root+"/"+file)
+
+        """
 
     def exp_walk1(self, func_string):
         pre_frame =[]
@@ -313,7 +330,7 @@ class Scatter_Animator():
         Scatter_animation.save("{}/Run.gif".format(self.name, self.name), fps=fps, writer='Pillow')
 
 if __name__ == '__main__':
-    name = './ga-pytorch/results/two_p_sweep/sweep_02'
+    name = './ga-pytorch/results/sweeps/sweep_02'
     if len(sys.argv) > 1:
         func = sys.argv[1]
     if len(sys.argv) > 2:

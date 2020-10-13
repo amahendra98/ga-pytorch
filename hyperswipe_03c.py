@@ -1,18 +1,21 @@
 from ga import GA
 import flag_reader
 
-print("THIS HAPPENED!")
-
 if __name__ == '__main__':
     Pop = [5000,4000]
     Trunc = [0.2]
     Mutation = [0.01,0.02,0.03]
     K_Nearest = [0.0005,0.001,0.005]
 
+    count = 0
     for p in Pop:
         for t in Trunc:
                 for m in Mutation:
                     for k in K_Nearest:
+                        count +=1
+                        if count <= 2:
+                            continue
+
                         flags = flag_reader.read_flag()
                         flags.pop_size = p
                         flags.trunc_threshold = t

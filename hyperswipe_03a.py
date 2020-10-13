@@ -22,7 +22,7 @@ if __name__ == '__main__':
                         flags.mutation_power = m
                         flags.k = k
                         flags.device=['cuda:0']
-                        flags.folder = "results/two_p_sweep/sweep_03/P{}_T{}_M{}_K{}".format(p,t,m,k)
+                        flags.folder = flags.folder+"/P{}_T{}_M{}_K{}".format(p,t,m,k)
 
                         ga = GA(flags)
                         ga.run()

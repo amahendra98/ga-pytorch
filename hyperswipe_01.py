@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
                         flags.generations = 500
                         flags.top = 0
-                        flags.folder = "results/two_p_sweep/sweep_01/P{}_T{}_M{}_I{}_K{}".format(p,t,m,i,k)
+                        flags.folder = "results/sweeps/sweep_01/P{}_T{}_M{}_I{}_K{}".format(p,t,m,i,k)
 
                         ga = GA(flags)
                         ga.run()
