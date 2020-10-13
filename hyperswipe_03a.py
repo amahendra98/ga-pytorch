@@ -2,9 +2,9 @@ from ga import GA
 import flag_reader
 
 if __name__ == '__main__':
-    Pop = [2000,3000]
-    Trunc = [0.2,0.5]
-    Mutation = [0.01,0.02,0.03]
+    Pop = [5000]
+    Trunc = [0.3]
+    Mutation = [0.01]
     K_Nearest = [0.0005,0.001,0.005]
 
     count = 0
@@ -13,7 +13,7 @@ if __name__ == '__main__':
                 for m in Mutation:
                     for k in K_Nearest:
                         count += 1
-                        if count <= 14:
+                        if count <= 0:
                             continue
 
                         flags = flag_reader.read_flag()
@@ -21,7 +21,7 @@ if __name__ == '__main__':
                         flags.trunc_threshold = t
                         flags.mutation_power = m
                         flags.k = k
-                        flags.device=['cuda:0']
+                        flags.device=['cuda:1']
                         flags.folder = flags.folder+"/P{}_T{}_M{}_K{}".format(p,t,m,k)
 
                         ga = GA(flags)
