@@ -2,16 +2,18 @@ from ga import GA
 import flag_reader
 
 if __name__ == '__main__':
-    Pop = [5000]
     Trunc = [0.4]
-    Mutation = [0.03]
-    K_Nearest = [0.0005,0.001,0.005]
+    Nodes = [50,100,200,500]
+    Layers = [1,2,3,4]
+    Pop = [500,1000,2000,5000]
+    Mutation = [0.001,0.01,0.1,1]
 
     count = 0
-    for p in Pop:
-        for t in Trunc:
-                for m in Mutation:
-                    for k in K_Nearest:
+    for t in Trunc:
+        for m in Mutation:
+            for p in Pop:
+                for l in Layers:
+                    for n in Nodes:
                         count += 1
                         if count <= 0:
                             continue
@@ -20,9 +22,9 @@ if __name__ == '__main__':
                         flags.pop_size = p
                         flags.trunc_threshold = t
                         flags.mutation_power = m
-                        flags.k = k
+                        flags.linear = [2] + [n for z in range(l) ] +[300]
                         flags.device = ['cuda:0']
-                        flags.folder = flags.folder+"/P{}_T{}_M{}_K{}".format(p,t,m,k)
+                        flags.folder = flags.folder+"/T{}_M{}_P{}_L{}_N{}".format(t,m,p,l,n)
 
                         ga = GA(flags)
                         ga.run()

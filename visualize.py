@@ -6,6 +6,32 @@ import pandas as pd
 from flag_reader import *
 import plotly.express as px
 import os
+import seaborn as sns; sns.set()
+import shutil
+
+class HMpoint(object):
+    """
+    This is a HeatMap point class where each object is a point in the heat map
+    properties:
+    1. BV_loss: best_validation_loss of this run
+    2. feature_1: feature_1 value
+    3. feature_2: feature_2 value, none is there is no feature 2
+    """
+
+    def __init__(self, bv_loss, f1, f2=None, f1_name='f1', f2_name='f2'):
+        self.bv_loss = bv_loss
+        self.feature_1 = f1
+        self.feature_2 = f2
+        self.f1_name = f1_name
+        self.f2_name = f2_name
+        # print(type(f1))
+
+    def to_dict(self):
+        return {
+            self.f1_name: self.feature_1,
+            self.f2_name: self.feature_2,
+            self.bv_loss: self.bv_loss
+        }
 
 class Data_Walker():
     def __init__(self, dir, thresh, skip=None, end=None):
@@ -19,10 +45,12 @@ class Data_Walker():
         self.Insertion = [0.05, 0.3, 0.45] #[0.01,0.05,0.1,0.2,0.5]
         self.K_Nearest = [0.1, 0.05, 0.005, 0.025] #self.Trunc
 
+
     def exp_walk2(self, func_string):
         pre_frame = []
 
         for root,dirs,files in os.walk(self.dir):
+            '''
             for file in files:
                 if file.find(".npz") != -1:
                     if file.find("furthest")!=-1 or file.find("avg_top")!=-1:
@@ -31,7 +59,7 @@ class Data_Walker():
                     print(file)
                     os.remove(root + "/" + file)
             '''
-             for folder in dirs:
+            for folder in dirs:
                 if folder == "imgs":
                     continue
                 if func_string.find('e') != -1:
@@ -39,7 +67,6 @@ class Data_Walker():
                 if func_string.find('h') != -1:
                     d_row = self.add_pc_data('/'+folder)
                     pre_frame.append(d_row)
-            '''
         return pre_frame
 
         """
@@ -116,6 +143,12 @@ class Data_Walker():
 
 
     def count_successful_gen(self, folder):
+        with open(self.dir+folder+'/parameters.txt', "r") as f:
+            content = f.read()
+            p_dict = eval(content)
+            d_ratio = np.array(p_dict['distance_ratio'])
+
+        '''
         avg_top = np.load(self.dir+folder+"/avg_top.npz")['arr_0']
         furthest = np.load(self.dir+folder+"/furthest.npz")["arr_0"]
 
@@ -124,12 +157,15 @@ class Data_Walker():
             distance_metric.append(np.sqrt(np.linalg.norm(avg_top[i]) / np.linalg.norm(furthest[i] / 2)))
 
         d_ratio = np.array(distance_metric)
+        '''
+
         bool_count = d_ratio < self.thresh
         gen_count = np.sum(bool_count)
+        p_dict['suc_gen'] = gen_count
 
-        with open(self.dir+folder+'/suc_gen.txt','w') as f:
+        with open(self.dir+folder+'/parameters.txt','w') as f:
             f.truncate()
-            f.write(str(gen_count))
+            print(p_dict,file=f)
 
     def add_pc_data(self, folder):
         row = None
@@ -137,27 +173,28 @@ class Data_Walker():
             content = f.read()
             p_dict = eval(content)
             #row = [p_dict['pop_size'], p_dict['trunc_threshold'],p_dict['mutation_power'],p_dict['insertion'],p_dict['k']]
-            row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['insertion'],p_dict['k']]
-
-        with open(self.dir+folder+'/suc_gen.txt','r') as f:
-            row.append(int(f.readline()))
+            row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],p_dict['k'],p_dict['suc_gen']]
 
         return(row)
 
 
-    def plot_parallel_coordinates(self, func_string):
+    def plot(self, func_string):
         preFrame = self.exp_walk2(func_string)
 
         #cols = ['Pop', 'Truncation Ratio', 'Mutation', 'Insertion', 'K-nearest neighbor ratio', 'Metric']
-        cols = ['Pop', 'Truncation Ratio', 'Insertion', 'K-nearest neighbor ratio', 'Metric']
+        cols = ['Pop', 'Truncation_ratio', 'Mutation', 'K_ratio', 'Metric']
         dFrame = pd.DataFrame(np.array(preFrame), columns=cols)
 
+        #self.pc(dFrame,cols)
+        self.heat_map(dFrame,cols)
+
+
+    def pc(self, dFrame,cols):
         lw_bound = 0
         dplot = dFrame[dFrame.Metric.between(lw_bound, 200)]
         fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:4],
                                       title="Plot with threshold at {}, restricted to metrics above {}".format(
                                           self.thresh, lw_bound))
-        fig.show()
 
         '''
         for i in range(lw_bound,0,-1):
@@ -165,6 +202,74 @@ class Data_Walker():
             fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:5],
                                 title="Plot with threshold at {}, restricted to metrics above {}".format(self.thresh,i))
             fig.write_image(self.dir+'/imgs/fig_{}.jpg'.format(i))
+        '''
+
+        fig.show()
+
+    def heat_map(self, dFrame,cols):
+        HeatMap_dir = self.dir+'/../Heat_Maps'
+        folders = os.listdir(self.dir)
+        folders.append('P5000_T0.5_M0.03_K0.0005')
+        for i in range(len(dFrame)):
+            print(dFrame.iloc[i], folders[i])
+        muts = dFrame.Mutation.unique()
+
+        for m in muts:
+            filept1 = 'Mutation_{}_'.format(m)
+            mframe = dFrame[dFrame['Mutation'] == m]
+
+            ' Create heatmaps with pop vs. top for each k'
+            ks = mframe.K_ratio.unique()
+            for k in ks:
+                filept2 = 'K-Ratio_{}/'.format(k)
+                frame = mframe[mframe['K_ratio'] == k]
+                frame = frame[['Metric','Pop','Truncation_ratio']]
+                print(frame)
+                indices = frame.index.values.tolist()
+
+                for idx in indices:
+                    print(idx)
+                    shutil.copytree(self.dir+'/'+folders[idx],HeatMap_dir+'/'+filept1+filept2+folders[idx])
+
+            ' Create heatmaps with pop vs. k for each top'
+            ts = mframe.Truncation_ratio.unique()
+            for t in ts:
+                filept2 = 'Truncation-Ratio_{}/'.format(t)
+                frame = mframe[mframe['Truncation_ratio'] == t]
+                frame = frame[['Metric','Pop','K_ratio']]
+                print(frame)
+                indices = frame.index.values.tolist()
+
+                for idx in indices:
+                    print(idx)
+                    shutil.copytree(self.dir+'/'+folders[idx],HeatMap_dir+'/'+filept1+filept2+folders[idx])
+
+
+            ' Create heatmaps with top vs. k for each pop'
+            ps = mframe.Pop.unique()
+            for p in ps:
+                filept2 = 'Population_{}/'.format(p)
+                frame = mframe[mframe['Pop'] == p]
+                frame = frame[['Metric','K_ratio','Truncation_ratio']]
+                print(frame)
+                indices = frame.index.values.tolist()
+
+                for idx in indices:
+                    print(idx)
+                    shutil.copytree(self.dir+'/'+folders[idx],HeatMap_dir+'/'+filept1+filept2+folders[idx])
+
+        '''
+            ' Create heatmaps with pop vs. k for each top'
+            ts = mframe.Truncation_ratio.unique()
+            for t in ts:
+                tframe = mframe[mframe['Truncation_ratio'] == t]
+                print(tframe.head())
+
+            ' Create heatmaps with top vs. k for each pop'
+            pops = mframe.Pop.unique()
+            for p in pops:
+                pframe = mframe[mframe['Pop'] == p]
+                print(pframe.head())
         '''
 
 class Scatter_Animator():
@@ -330,7 +435,8 @@ class Scatter_Animator():
         Scatter_animation.save("{}/Run.gif".format(self.name, self.name), fps=fps, writer='Pillow')
 
 if __name__ == '__main__':
-    name = './ga-pytorch/results/sweeps/sweep_02'
+    #name = './ga-pytorch/results/sweeps/sweep_03'
+    name = './ga-pytorch/results/sweeps/sweep_03'
     if len(sys.argv) > 1:
         func = sys.argv[1]
     if len(sys.argv) > 2:
@@ -353,4 +459,4 @@ if __name__ == '__main__':
         d.exp_walk2(func)
     if func =='h' or func=='eh':
         d = Data_Walker(name, thresh, skip, end)
-        d.plot_parallel_coordinates(func)
+        d.plot(func)

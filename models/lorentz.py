@@ -7,11 +7,10 @@ import numpy as np
 
 
 class lorentz_model(nn.Module):
-    def __init__(self):
+    def __init__(self, linear):
         super(lorentz_model,self).__init__()
-
-        self.linear = [2,100,100]
-        self.num_spec_point = 300
+        self.linear = linear[0:-1]
+        self.num_spec_point = linear[-1]
         self.num_lorentz_osc = 1
         self.freq_low = 0.5
         self.freq_high = 5
@@ -29,11 +28,12 @@ class lorentz_model(nn.Module):
 
     def forward(self, G):
         out = G
-        out = self.linears[1](F.relu(self.linears[0](out))) #GPU Optimized forward maybe?
+        for cnxn in self.linears:
+            out = F.relu(cnxn(out))
 
-        w0 = F.relu(self.lin_w0(F.relu(out)))
-        wp = F.relu(self.lin_wp(F.relu(out)))
-        g = F.relu(self.lin_g(F.relu(out)))
+        w0 = F.relu(self.lin_w0(out))
+        wp = F.relu(self.lin_wp(out))
+        g = F.relu(self.lin_g(out))
 
         w0_out = w0
         wp_out = wp

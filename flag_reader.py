@@ -13,6 +13,7 @@ def read_flag():
     parser.add_argument('--pop-size', type=int, help='Population size.', default=POP_SIZE)
     parser.add_argument('--generations', type=int, default=GENERATIONS, metavar='N',
                             help='number of generations to train (default: 1000)')
+    parser.add_argument('--linear', type=list, default=LINEAR, metavar='Model layer units')
     parser.add_argument('--top', type=int, default=TOP, metavar='N',
                             help='numer of top elites that should be re-evaluated')
     parser.add_argument('--trunc-threshold', type=int, default=TRUNC,
@@ -57,7 +58,7 @@ def write_flags_and_BVE(flags, metric, save_dir):
     flags_dict = vars(flags)
     flags_dict_copy = flags_dict.copy()  # in order to not corrupt the original data strucutre
     #flags_dict_copy['y_range'] = yrange_str  # Change the y range to be acceptable long string
-    flags_dict_copy['distance_ratio'] = metric.tolist()  # Append the metric as list
+    flags_dict_copy['best_validation_loss'] = metric  # Append the metric
     # Convert the dictionary into pandas data frame which is easier to handle with and write read
     print(flags_dict_copy)
     with open(os.path.join(save_dir, 'parameters.txt'), 'w') as f:

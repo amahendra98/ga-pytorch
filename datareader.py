@@ -66,7 +66,7 @@ def read_data( x_range, y_range, geoboundary, batch_size=0, set_size=0, data_dir
       :param data_dir: parent directory of where the data is stored, by default it's the current directory
       :param rand_seed: random seed
       :param test_ratio: if this is not 0, then split test data from training data at this ratio
-                         if this is 0, use the dataIn/eval files to make the test set
+                         if this is 0, use the toy_data/eval files to make the test set
       """
 
     # Import data files
@@ -77,11 +77,16 @@ def read_data( x_range, y_range, geoboundary, batch_size=0, set_size=0, data_dir
         print("Splitting data into training and test sets with a ratio of:", str(test_ratio))
         ftrTrain, ftrTest, lblTrain, lblTest = train_test_split(ftrTrain, lblTrain,
                                                                 test_size=test_ratio, random_state=rand_seed)
+        ftrVal = ftrTest[0:int(len(ftrTest)/2)]
+        ftrTest = ftrTest[int(len(ftrTest)/2):-1]
+        lblVal = lblTest[0:int(len(lblTest) / 2)]
+        lblTest = lblTest[int(len(lblTest) / 2):-1]
         print('Total number of training samples is {}'.format(len(ftrTrain)))
         print('Total number of test samples is {}'.format(len(ftrTest)))
+        print('Total number of validation samples is {}'.format(len(ftrVal)))
         print('Length of an output spectrum is {}'.format(len(lblTest[0])))
     else:
-        print("Using separate file from dataIn/Eval as test set")
+        print("Using separate file from toy_data/Eval as test set")
         ftrTest, lblTest = importData(os.path.join(data_dir, 'toy_data', 'eval'), x_range, y_range)
 
     # print('Total number of training samples is {}'.format(len(ftrTrain)))
@@ -90,8 +95,8 @@ def read_data( x_range, y_range, geoboundary, batch_size=0, set_size=0, data_dir
     # print('downsampling output curves')
     # resample the output curves so that there are not so many output points
     if len(lblTrain[0]) > 2000:                                 # For Omar data set
-        lblTrain = lblTrain[::, len(lblTest[0])-1800::6]
-        lblTest = lblTest[::, len(lblTest[0])-1800::6]
+        lblTrain = lblTrain[::, len(lblVal[0]) + len(lblTest[0])-1800::6]
+        lblTest = lblTest[::, len(lblVal[0]) + len(lblTest[0])-1800::6]
 
     # print('length of downsampled train spectra is {} for first, {} for final, '.format(len(lblTrain[0]),
     #                                                                                    len(lblTrain[-1])),
@@ -100,6 +105,7 @@ def read_data( x_range, y_range, geoboundary, batch_size=0, set_size=0, data_dir
     print('Generating torch datasets')
     assert np.shape(ftrTrain)[0] == np.shape(lblTrain)[0]
     assert np.shape(ftrTest)[0] == np.shape(lblTest)[0]
+    assert np.shape(ftrVal)[0] == np.shape(lblVal)[0]
 
     # Normalize the data if instructed using boundary
     if normalize_input:
@@ -107,25 +113,27 @@ def read_data( x_range, y_range, geoboundary, batch_size=0, set_size=0, data_dir
         ftrTest[:,0:4] = (ftrTest[:,0:4] - (geoboundary[0] + geoboundary[1]) / 2)/(geoboundary[1] - geoboundary[0]) * 2
         ftrTrain[:,4:] = (ftrTrain[:,4:] - (geoboundary[2] + geoboundary[3]) / 2)/(geoboundary[3] - geoboundary[2]) * 2
         ftrTest[:,4:] = (ftrTest[:,4:] - (geoboundary[2] + geoboundary[3]) / 2)/(geoboundary[3] - geoboundary[2]) * 2
+        ftrVal[:,0:4] = (ftrVal[:,0:4] - (geoboundary[0] + geoboundary[1]) / 2) / (geoboundary[1] - geoboundary[0]) * 2
+        ftrVal[:,4:] = (ftrVal[:,4:] - (geoboundary[2] + geoboundary[3]) / 2)/(geoboundary[3] - geoboundary[2]) * 2
 
     train_data = MetaMaterialDataSet(ftrTrain, lblTrain, bool_train= True)
     test_data = MetaMaterialDataSet(ftrTest, lblTest, bool_train= False)
+    val_data = MetaMaterialDataSet(ftrVal, lblVal, bool_train = False)
 
     if set_size == 0:
         train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size)
         test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size)
+        val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)
     if batch_size == 0:
         batch_size = len(train_data)/set_size
         rem = len(train_data)%set_size
         if rem > 0: batch_size += 1
         train_loader = torch.utils.data.DataLoader(train_data, batch_size=int(batch_size))
 
-        batch_size = len(test_data)/set_size
-        rem = len(test_data)%set_size
-        if rem > 0: batch_size += 1
-        test_loader = torch.utils.data.DataLoader(test_data, batch_size=int(batch_size))
+        test_loader = torch.utils.data.DataLoader(test_data, batch_size=len(test_data))
+        val_loader = torch.utils.data.DataLoader(val_data, batch_size=len(val_data))
 
-    return train_loader, test_loader
+    return train_loader, test_loader, val_loader
 
 
 class MetaMaterialDataSet(Dataset):

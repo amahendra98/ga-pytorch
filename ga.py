@@ -2,7 +2,7 @@ import flag_reader
 import torch
 import numpy as np
 import time
-from scatter_animator import Scatter_Animator
+from visualize import Scatter_Animator
 
 class GA:
     def __init__(self, flags):
@@ -23,64 +23,74 @@ class GA:
 
         ' Initialize GPUWorkers'
         from train import GPUWorker
-
         self.devices = devices #Creating single gpu version first
-        self.worker = GPUWorker(devices,pop_size,flags.num_batches,flags.top,flags.trunc_threshold,flags.mutation_power, self.max_gen,
-                                  flags.loss_weight,flags.novelty_weight,flags.insertion,flags.k,flags.folder)
+        self.worker = GPUWorker(flags)
 
     def run(self):
+        ' DO GA ALGORITHM '
+
+        ' Clear the space occupied by rmem (space was occupied to force pytorch to allocate enough memory for run'
         self.worker.rmem = None
-        gz = 0
+
+        ' Time and execute run over max generations'
         start = time.time()
-        while(gz<self.max_gen):
+        print(self.name)
+        for gz in range(self.max_gen):
             self.worker.run(gz)
-            print("Gen: ", gz,"\t arcv length: ",self.worker.arcv_idx)
-            gz += 1
-        end = time.time()
-        print("Time elapsed: ", end-start)
+            print("Gen: ", gz)
 
-        #pop = np.array(self.worker.mp_gen)
-        #elite_idx = np.array(self.worker.mpe_gen_idx)
-        #arcv_mod = np.array(self.worker.arcv_mod)
-        #arcv_term_idx = np.array(self.worker.arcv_term_idx)
 
+        ' Rate run '
+        elapsed = time.time() - start
+
+        # Finds distance between origin model of run and center mean of all models after run
+        #metric, avg_top, furthest = self.metric_center()
+        metric = self.best_validation_loss()
+
+
+        ' Store run information '
+        # Save flags and metric value in parameter.txt
+        flag_reader.write_flags_and_BVE(self.flags,metric,self.name)
+
+        # Save numpy arrays
+        #np.savez(self.dir+'/avg_top.npz', avg_top)
+        #np.savez(self.dir+'/furthest.npz', furthest)
+
+        # Time of run
+        print("Time elapsed: ", elapsed)
+        with open(self.name+'/time.txt', 'w') as f:
+            f.write(elapsed)
+
+
+        ' Plot characteristics of run '
+        #Scatter_Animator
+
+    def best_validation_loss(self):
+        return self.worker.best_validation_loss()
+
+    def metric_center(self):
+        ' General formula for measuring the symmetry and center of a run'
         with torch.no_grad():
             avg_top = []
             amass = [np.zeros_like(self.worker.models[0].p_list())]
             for i in range(len(self.worker.avg_tops)):
                 amass += self.worker.avg_tops[i]
-                avg_top.append(amass/(i+1))
+                avg_top.append(amass / (i + 1))
 
             furthest = self.worker.furthest_model
 
             distance_metric = []
             for i in range(len(avg_top)):
-                distance_metric.append(np.sqrt(np.linalg.norm(avg_top[i])/np.linalg.norm(furthest[i]/2)))
+                distance_metric.append(np.sqrt(np.linalg.norm(avg_top[i]) / np.linalg.norm(furthest[i] / 2)))
 
             distance_metric = np.array(distance_metric)
 
             avg_top = np.squeeze(np.array(avg_top))
             furthest = np.squeeze(np.array(furthest))
 
-            #np.savez(self.name+"/pop", pop)
-            #np.savez(self.name+"/elite_idx",elite_idx)
-            #np.savez(self.name+"/arcv_mod",arcv_mod)
-            #np.savez(self.name+"/arcv_term_idx", arcv_term_idx)
-            np.savez(self.name+"/avg_top", avg_top)
-            np.savez(self.name+"/furthest", furthest)
+        return distance_metric, avg_top, furthest
 
-            """
-            for j in range(len(self.worker.mut_gen_idx)):
-                d = self.name+"/mutates/gen_{}".format(j)
-                for l in range(len(self.worker.mut_gen_idx[j])):
-                    dir = d + "_elite_{}".format(l)
-                    np.savez(dir,self.worker.mut_gen_idx[j][l])
-            """
 
-            flag_reader.write_flags_and_BVE(self.flags,distance_metric,self.name)
-
-            #s = Scatter_Animator(name,self.time,self.x_lim,self.y_lim)
-            #s.animate()
 
 
 '''
