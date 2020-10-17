@@ -58,7 +58,7 @@ def write_flags_and_BVE(flags, metric, save_dir):
     flags_dict = vars(flags)
     flags_dict_copy = flags_dict.copy()  # in order to not corrupt the original data strucutre
     #flags_dict_copy['y_range'] = yrange_str  # Change the y range to be acceptable long string
-    flags_dict_copy['best_validation_loss'] = metric  # Append the metric
+    flags_dict_copy['best_validation_loss'] = float(metric.cpu().numpy())  # Append the metric
     # Convert the dictionary into pandas data frame which is easier to handle with and write read
     print(flags_dict_copy)
     with open(os.path.join(save_dir, 'parameters.txt'), 'w') as f:

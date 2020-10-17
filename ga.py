@@ -59,7 +59,7 @@ class GA:
         # Time of run
         print("Time elapsed: ", elapsed)
         with open(self.name+'/time.txt', 'w') as f:
-            f.write(elapsed)
+            f.write(str(elapsed))
 
 
         ' Plot characteristics of run '
