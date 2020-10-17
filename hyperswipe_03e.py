@@ -15,7 +15,9 @@ if __name__ == '__main__':
                 for l in Layers:
                     for n in Nodes:
                         count += 1
-                        if count <= 0:
+                        if count <= 11:
+                            continue
+                        if l == 1 or n == 100:
                             continue
 
                         flags = flag_reader.read_flag()

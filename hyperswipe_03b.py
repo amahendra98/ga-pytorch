@@ -3,10 +3,10 @@ import flag_reader
 
 if __name__ == '__main__':
     Trunc = [0.01]
+    Mutation = [0.01, 0.1, 1]
+    Pop = [500, 1000, 2000, 5000]
+    Layers = [1, 2, 3, 4]
     Nodes = [50,100,200,500]
-    Layers = [1,2,3,4]
-    Pop = [500,1000,2000,5000]
-    Mutation = [0.001,0.01,0.1,1]
 
     count = 0
     for t in Trunc:
@@ -15,7 +15,9 @@ if __name__ == '__main__':
                 for l in Layers:
                     for n in Nodes:
                         count += 1
-                        if count <= 0:
+                        if count <= 24:
+                            continue
+                        if l == 1 or n == 100:
                             continue
 
                         flags = flag_reader.read_flag()

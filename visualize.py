@@ -66,6 +66,8 @@ class Data_Walker():
                     self.count_successful_gen('/'+folder)
                 if func_string.find('h') != -1:
                     d_row = self.add_pc_data('/'+folder)
+                    if d_row ==0:
+                        continue
                     pre_frame.append(d_row)
         return pre_frame
 
@@ -169,11 +171,18 @@ class Data_Walker():
 
     def add_pc_data(self, folder):
         row = None
-        with open(self.dir+folder+'/parameters.txt','r') as f:
-            content = f.read()
-            p_dict = eval(content)
-            #row = [p_dict['pop_size'], p_dict['trunc_threshold'],p_dict['mutation_power'],p_dict['insertion'],p_dict['k']]
-            row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],p_dict['k'],p_dict['suc_gen']]
+        try:
+            with open(self.dir+folder+'/parameters.txt','r') as f:
+                content = f.read()
+                p_dict = eval(content)
+                lin = p_dict['linear']
+                layer = len(lin)
+                node = lin[1]
+                #row = [p_dict['pop_size'], p_dict['trunc_threshold'],p_dict['mutation_power'],p_dict['insertion'],p_dict['k']]
+                row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],node,layer,p_dict['best_validation_loss']]
+        except:
+            row = 0
+            return(row)
 
         return(row)
 
@@ -182,19 +191,19 @@ class Data_Walker():
         preFrame = self.exp_walk2(func_string)
 
         #cols = ['Pop', 'Truncation Ratio', 'Mutation', 'Insertion', 'K-nearest neighbor ratio', 'Metric']
-        cols = ['Pop', 'Truncation_ratio', 'Mutation', 'K_ratio', 'Metric']
+        cols = ['Pop', 'Truncation_ratio', 'Mutation', 'Nodes', 'Layers', 'Metric']
         dFrame = pd.DataFrame(np.array(preFrame), columns=cols)
 
-        #self.pc(dFrame,cols)
-        self.heat_map(dFrame,cols)
+        self.pc(dFrame,cols)
+        #self.heat_map(dFrame,cols)
 
 
     def pc(self, dFrame,cols):
         lw_bound = 0
         dplot = dFrame[dFrame.Metric.between(lw_bound, 200)]
-        fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:4],
-                                      title="Plot with threshold at {}, restricted to metrics above {}".format(
-                                          self.thresh, lw_bound))
+        fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:5],
+                                      title="Restricted to metrics above {}".format(lw_bound))
+        #fig.write_image(self.dir+'/imgs/mut_0.001_complete.png')
 
         '''
         for i in range(lw_bound,0,-1):
@@ -209,7 +218,9 @@ class Data_Walker():
     def heat_map(self, dFrame,cols):
         HeatMap_dir = self.dir+'/../Heat_Maps'
         folders = os.listdir(self.dir)
-        folders.append('P5000_T0.5_M0.03_K0.0005')
+        #folders.append('P5000_T0.5_M0.03_K0.0005')
+
+        '''
         for i in range(len(dFrame)):
             print(dFrame.iloc[i], folders[i])
         muts = dFrame.Mutation.unique()
@@ -257,7 +268,7 @@ class Data_Walker():
                 for idx in indices:
                     print(idx)
                     shutil.copytree(self.dir+'/'+folders[idx],HeatMap_dir+'/'+filept1+filept2+folders[idx])
-
+        '''
         '''
             ' Create heatmaps with pop vs. k for each top'
             ts = mframe.Truncation_ratio.unique()
@@ -436,7 +447,7 @@ class Scatter_Animator():
 
 if __name__ == '__main__':
     #name = './ga-pytorch/results/sweeps/sweep_03'
-    name = './ga-pytorch/results/sweeps/sweep_03'
+    name = './ga-pytorch/results/sweeps/sweep_04'
     if len(sys.argv) > 1:
         func = sys.argv[1]
     if len(sys.argv) > 2:
