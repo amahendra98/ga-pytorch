@@ -6,7 +6,7 @@ if __name__ == '__main__':
     Nodes = [50,100,200,500]
     Layers = [1,2,3,4]
     Pop = [500,1000,2000,5000]
-    Mutation = [0.001,0.01,0.1,1]
+    Mutation = [0.01,0.1,1]
 
     count = 0
     for t in Trunc:
@@ -17,7 +17,7 @@ if __name__ == '__main__':
                         count += 1
                         if count <= 15:
                             continue
-                        if l == 1 or n == 100:
+                        if l == 1 or n == 100 or l*n*p >= 3*1000000:
                             continue
 
                         flags = flag_reader.read_flag()

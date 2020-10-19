@@ -66,6 +66,8 @@ class GPUWorker(object):
 
         #print('Memory after BC_arcv initialization: ',torch.cuda.memory_allocated(device)/1000000000)
 
+        print('Memory before model init: ', torch.cuda.memory_allocated(flags.device[0]) / 1000000000)
+
         ' Model generation '
         with torch.no_grad():
             for i in range(self.num_models):
@@ -99,12 +101,12 @@ class GPUWorker(object):
 
         'Allocate additional memory if not enough reserved'
         self.rmem = None
-        #if torch.cuda.memory_reserved(flags.device[0])/1000000000 <= 9.5:
-        #    print("IF NOT SKIPPED")
-        #    mem = torch.cuda.memory_allocated(flags.device[0])
-        #    mem_av = 9.5*1000000000
-        #    mem_block = (mem_av - mem)/1000000
-        #    self.rmem = torch.empty((256,1024,int(mem_block)), device=self.device)
+        if torch.cuda.memory_reserved(flags.device[0])/1000000000 <= 9.5:
+            print("IF NOT SKIPPED")
+            mem = torch.cuda.memory_allocated(flags.device[0])
+            mem_av = 9.5*1000000000
+            mem_block = (mem_av - mem)/1000000
+            self.rmem = torch.empty((256,1024,int(mem_block)), device=self.device)
 
         print('Memory after blocking additional memory: ', torch.cuda.memory_allocated(flags.device[0])/1000000000)
         print('Memory Reserved: ', torch.cuda.memory_reserved(flags.device[0]) / 1000000000)

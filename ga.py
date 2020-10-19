@@ -2,7 +2,6 @@ import flag_reader
 import torch
 import numpy as np
 import time
-from visualize import Scatter_Animator
 
 class GA:
     def __init__(self, flags):
