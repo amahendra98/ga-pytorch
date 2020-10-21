@@ -2,24 +2,24 @@ import time
 
 'Run Parameters'
 LINEAR = [2,100,100,300]
-GENERATIONS = 500
+GENERATIONS = 2000
 POP_SIZE = 2000
 TOP = 0
-TRUNC = 0.65
+TRUNC = 0.1
 MUT = 0.02
 NOV_WEIGHT = 1000
 LOSS_WEIGHT = 1
 NUM_BATCHES = 1
 INSERTION = 0
-K_NEAREST = 0.001
+K_NEAREST = 0.01
 
 'Training Parameters'
 SEED = 1234
 (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
 #FOLDER = 'results/two_p/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
 #FOLDER = '/work/amm163/results/sweep_04'
-FOLDER = 'results/sweeps/sweep_04'
-DEVICE_LIST = ['cuda:1']
+FOLDER = 'results/sweeps/sweep_05'
+DEVICE_LIST = ['cuda:0']
 
 'Gif Parameters'
 TIME = 10

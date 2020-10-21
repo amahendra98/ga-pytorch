@@ -7,7 +7,11 @@ import random
 
 if __name__ == '__main__':
     f = flag_reader.read_flag()
-    f.folder = f.folder
+    t = f.trunc_threshold
+    m = f.mutation_power
+    p = f.pop_size
+
+    f.folder = f.folder+"/T{}_M{}_P{}".format(t,m,p)
     f.device=['cuda:0']
     print(f)
     ga = GA(f)

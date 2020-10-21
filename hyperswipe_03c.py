@@ -15,12 +15,23 @@ if __name__ == '__main__':
                 for l in Layers:
                     for n in Nodes:
                         count += 1
-                        if count <= 15:
+                        if count >= 2:
                             continue
                         if l == 1 or n == 100 or l*n*p >= 3*1000000:
                             continue
 
-                        flags = flag_reader.read_flag()
+                        f = flag_reader.read_flag()
+                        t = f.trunc_threshold
+                        f.mutation_power = 1
+                        p = f.pop_size
+
+                        f.folder = f.folder + "/T{}_M{}_P{}".format(t, m, p)
+                        f.device = ['cuda:0']
+                        print(f)
+                        ga = GA(f)
+                        ga.run()
+
+                        """flags = flag_reader.read_flag()
                         flags.pop_size = p
                         flags.trunc_threshold = t
                         flags.mutation_power = m
@@ -28,5 +39,5 @@ if __name__ == '__main__':
                         flags.device = ['cuda:0']
                         flags.folder = flags.folder+"/T{}_M{}_P{}_L{}_N{}".format(t,m,p,l,n)
 
-                        ga = GA(flags)
-                        ga.run()
+                        #ga = GA(flags)
+                        #ga.run()"""
