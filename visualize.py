@@ -199,11 +199,11 @@ class Data_Walker():
 
 
     def pc(self, dFrame,cols):
-        up_bound = 8.85
+        up_bound = 8.75
         dplot = dFrame[dFrame.Metric.between(0, up_bound)]
         fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:5],
                                       title="Restricted to Validation Loss below {}".format(up_bound))
-        fig.write_image(self.dir+'/imgs/below_{}.png'.format(up_bound))
+        fig.write_image(self.dir+'/imgs/below_{}_1.png'.format(up_bound))
 
         '''
         for i in range(lw_bound,0,-1):
