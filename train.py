@@ -247,7 +247,7 @@ class GPUWorker(object):
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-            #self.save_plots(gen,plot_arr=[0,9,90])
+            self.save_plots(gen,plot_arr=[0,9,90])
 
     def fitness_f(self, x, y, err_ceil=100):
         ' General Fitness Function Calculation '
@@ -260,7 +260,7 @@ class GPUWorker(object):
         return torch.neg(loss)
 
 
-    def save_plots(self,gen,rate=20,plot_arr=[0,9,90]):
+    def save_plots(self,gen,rate=50,plot_arr=[0,9,90]):
         ' Plots champion, worst elite, and worst graph against each graph indexed from the raw training data '
         if gen % rate == 0:
             fig = plt.figure()

@@ -11,7 +11,7 @@ if __name__ == '__main__':
     m = f.mutation_power
     p = f.pop_size
 
-    f.folder = f.folder+"/T{}_M{}_P{}".format(t,m,p)
+    f.folder = f.folder+"/T{}_M_P{}_lrs4".format(t,p)
     f.device=['cuda:0']
     print(f)
     ga = GA(f)

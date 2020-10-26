@@ -23,11 +23,11 @@ if __name__ == '__main__':
 
     f = flag_reader.read_flag()
     t = f.trunc_threshold
-    f.mutation_power = 100
+    f.mutation_power = 0.05
     m = f.mutation_power
     p = f.pop_size
 
-    f.folder = f.folder + "/T{}_M{}_P{}".format(t, m, p)
+    f.folder = f.folder + "/T{}_M_P{}_lrs9".format(t, p)
     f.device = ['cuda:1']
     print(f)
     ga = GA(f)

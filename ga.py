@@ -34,9 +34,14 @@ class GA:
         ' Time and execute run over max generations'
         start = time.time()
         print(self.name)
+        lr_sched = [(250,1)]#[(0,0.05), (20,0.02), (40, 0.01), (100,0.005), (200, 0.001), (300, 0.0005)]
         for gz in range(self.max_gen):
+            for step, lr in lr_sched:
+                if gz > step and self.worker.mut > lr:
+                    self.worker.mut = lr
+                    print("At Gen: ", gz, " mutation power changed to ", self.worker.mut)
             self.worker.run(gz)
-            print("Gen: ", gz)
+            print("Gen: ", gz, "Mutation Rate: ", self.worker.mut)
 
 
         ' Rate run '
