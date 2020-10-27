@@ -1,5 +1,5 @@
 import flag_reader
-from scheduler import *
+from schedulers import *
 import torch
 import numpy as np
 import time
@@ -15,14 +15,17 @@ class GA:
         self.y_lim = flags.y_lim
         self.name = flags.folder
         self.gen = 0
+        self.sched = None
 
         func_args = flags.schedule_args[1:]
-        if flags.schedule_args[0] == 'generational scheduler':
+        if flags.schedule_args[0] == 'generational_scheduler':
             self.sched = generational_scheduler(*func_args)
-        if flags.schedule_args[0] == 'value based scheduler':
+        if flags.schedule_args[0] == 'value_based_scheduler':
             self.sched = value_based_scheduler(*func_args)
-        if flags.schedule_args[0] == 'step length doubling scheduler':
+        if flags.schedule_args[0] == 'step_length_doubling_scheduler':
             self.sched = step_length_doubling_scheduler(*func_args)
+        if flags.schedule_args[0] == 'variable_length_value_scheduler':
+            self.sched = variable_length_value_scheduler(*func_args)
 
         ' Divide population amongst GPUs and store how many models on each GPU '
         pop_per_device = int( pop_size/len(devices ))

@@ -59,8 +59,8 @@ class value_based_scheduler(base_scheduler):
         self.perr_thresh = thresh
 
     def change_condition(self, gen):
-        u = np.mean(self.vals)
-        perr = np.abs((self.vals - u) / u)
+        u = np.mean(self.prior)
+        perr = np.abs(np.max(self.prior) - np.min(self.prior))/np.mean(self.prior)
 
         if perr <= self.perr_thresh:
             return True
@@ -75,7 +75,7 @@ class step_length_doubling_scheduler(value_based_scheduler):
 
     def reset_prior(self):
         self.prior = np.empty(2*len(self.prior))
-        self.prior = np.nan
+        self.prior[:] = np.nan
 
 
 class generational_scheduler(base_scheduler):
@@ -88,3 +88,17 @@ class generational_scheduler(base_scheduler):
 
     def change_condition(self, gen):
         return gen >= self.schedule[1][1]
+
+class variable_length_value_scheduler(value_based_scheduler):
+    def __init__(self, step_length, schedule, thresh):
+        super(variable_length_value_scheduler, self).__init__(step_length, schedule, thresh)
+
+    def param_from_schedule(self, idx):
+        return self.schedule[idx][0]
+
+    def reset_prior(self):
+        for i in range(len(self.schedule)):
+            if self.current == self.param_from_schedule(i):
+                self.prior = np.empty(self.schedule[i][1])
+                self.prior[:] = np.nan
+                break

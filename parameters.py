@@ -20,7 +20,7 @@ SEED = 1234
 #FOLDER = '/work/amm163/results/sweep_04'
 FOLDER = 'results/sweeps/sweep_05'
 DEVICE_LIST = ['cuda:0']
-SCHED_ARGS = ('generational scheduler', 10, [(MUT,0), (0.02,20),(0.01,60)])
+SCHED_ARGS = ('variable length value scheduler', 5, [(MUT,5), (0.02,20),(0.01,)])
 
 'Gif Parameters'
 TIME = 10

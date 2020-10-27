@@ -17,7 +17,8 @@ if __name__ == '__main__':
     f.mutation_power = 0.05
     m = f.mutation_power
     p = f.pop_size
-    f.schedule_args = ('generational scheduler', 10, [(0.05,0), (0.02,20),(0.01,120)])
+    f.schedule_args = ('variable_length_value_scheduler', 5, [(0.05,5), (0.02, 10),(0.015,10),(0.01,10),(0.0075,20),
+                                                              (0.005, 30)], 0.001)
 
     f.folder = f.folder + "/T{}_M{}_P{}_{}".format(t,m,p,f.schedule_args[0])+'_run3'
     f.device = ['cuda:0']

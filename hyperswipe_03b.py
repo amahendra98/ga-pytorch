@@ -14,11 +14,12 @@ if __name__ == '__main__':
 
     f = flag_reader.read_flag()
     t = f.trunc_threshold
-    f.mutation_power = 0.02
+    f.mutation_power = 0.05
     m = f.mutation_power
     p = f.pop_size
+    f.schedule_args = ('variable_length_value_scheduler', 5, [(0.05,5), (0.02, 10),(0.01,10),(0.005, 30)], 0.001)
 
-    f.folder = f.folder + "/T{}_M{}_P{}_100by4".format(t,m,p)
+    f.folder = f.folder + "/T{}_M{}_P{}_{}".format(t,m,p,f.schedule_args[0])+'_run0'
     f.device = ['cuda:0']
     print(f)
     ga = GA(f)
