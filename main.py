@@ -11,7 +11,9 @@ if __name__ == '__main__':
     m = f.mutation_power
     p = f.pop_size
 
-    f.folder = f.folder+"/T{}_M_P{}_lrs4".format(t,p)
+    #('generational scheduler', 10, [(MUT,0), (0.02,20),(0.01,60)])
+
+    f.folder = f.folder+"/T{}_M_P{}_generational_scheduler".format(t,p)
     f.device=['cuda:0']
     print(f)
     ga = GA(f)

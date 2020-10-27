@@ -34,7 +34,7 @@ class GPUWorker(object):
         self.writer = SummaryWriter(flags.folder)
 
         # Parameters to hold memory
-        self.best_val = 0
+        self.best_val = np.inf
         self.models = []
         self.train_data = []
         self.test_data = []
@@ -203,7 +203,7 @@ class GPUWorker(object):
             neg_val = -self.fitness_f(val_pred,ty)
 
             self.writer.add_scalar('MSE loss (negative of calculated validation loss)', neg_val,gen)
-            if self.best_val < neg_val:
+            if self.best_val > neg_val:
                 self.best_val = neg_val
 
             ' Copy models over truncation barrier randomly into bottom models w/ mutation '

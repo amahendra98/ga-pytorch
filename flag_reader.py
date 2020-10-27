@@ -29,6 +29,7 @@ def read_flag():
     parser.add_argument('--x-lim',nargs='+', type=int, default=XLIM, help='Gif X limit')
     parser.add_argument('--y-lim', nargs='+', type=int, default=YLIM, help='Gif Y limit')
     parser.add_argument('--gif-time', type=int, default=TIME, help='Gif total time')
+    parser.add_argument('--schedule-args', type=tuple, default=SCHED_ARGS, help='Arguments to run scheduler')
     flags = parser.parse_args()
 
     return flags

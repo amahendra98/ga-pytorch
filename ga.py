@@ -1,4 +1,5 @@
 import flag_reader
+from scheduler import *
 import torch
 import numpy as np
 import time
@@ -13,6 +14,15 @@ class GA:
         self.x_lim = flags.x_lim
         self.y_lim = flags.y_lim
         self.name = flags.folder
+        self.gen = 0
+
+        func_args = flags.schedule_args[1:]
+        if flags.schedule_args[0] == 'generational scheduler':
+            self.sched = generational_scheduler(*func_args)
+        if flags.schedule_args[0] == 'value based scheduler':
+            self.sched = value_based_scheduler(*func_args)
+        if flags.schedule_args[0] == 'step length doubling scheduler':
+            self.sched = step_length_doubling_scheduler(*func_args)
 
         ' Divide population amongst GPUs and store how many models on each GPU '
         pop_per_device = int( pop_size/len(devices ))
@@ -34,6 +44,11 @@ class GA:
         ' Time and execute run over max generations'
         start = time.time()
         print(self.name)
+
+        for gen in range(self.max_gen):
+            self.step()
+
+        '''
         lr_sched = [(250,1)]#[(0,0.05), (20,0.02), (40, 0.01), (100,0.005), (200, 0.001), (300, 0.0005)]
         for gz in range(self.max_gen):
             for step, lr in lr_sched:
@@ -42,7 +57,7 @@ class GA:
                     print("At Gen: ", gz, " mutation power changed to ", self.worker.mut)
             self.worker.run(gz)
             print("Gen: ", gz, "Mutation Rate: ", self.worker.mut)
-
+        '''
 
         ' Rate run '
         elapsed = time.time() - start
@@ -95,24 +110,17 @@ class GA:
         return distance_metric, avg_top, furthest
 
 
+    def step(self):
+        print("Gen: ", self.gen, "Mutation Rate: ", self.worker.mut)
 
+        if not self.sched is None:
+            rec = self.worker.mut
+            self.worker.mut = self.sched.check(self.worker.best_validation_loss(), self.gen)
+            if rec != self.worker.mut:
+                print("At Gen: ", self.gen, " mutation power changed to ", self.worker.mut)
 
-'''
-        g_file = open(folder + "/fitness_" + filename + ".csv", 'a')
-        g_file.close()
+                with open(self.name+'/scheduler.txt', 'a') as file:
+                    file.write("{"+"'Gen': {}, 'Mut': {}".format(self.gen,self.worker.mut)+"}, ")
 
-        g_file = open(folder + "/fitness_" + filename + ".csv", "r+")
-        g_file.truncate(0)
-        g_file.close()
-
-        g_file = open(folder + "/fitness_" + filename + ".csv", 'a')
-        g_file.write("Generation, elite_fitness\n")
-
-        for w in self.workers:
-            #arr = w.elite_vals.cpu().numpy()[0]
-            arr = w.elite_vals
-            for i,val in enumerate(arr):
-                g_file.write("{}, {}\n".format(i,val))
-
-        g_file.close()
-'''
+        self.worker.run(self.gen)
+        self.gen += 1
