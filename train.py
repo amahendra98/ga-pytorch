@@ -104,7 +104,7 @@ class GPUWorker(object):
         if torch.cuda.memory_reserved(flags.device[0])/1000000000 <= 9.5:
             print("IF NOT SKIPPED")
             mem = torch.cuda.memory_allocated(flags.device[0])
-            mem_av = 9.5*1000000000
+            mem_av = 5*1000000000
             mem_block = (mem_av - mem)/1000000
             self.rmem = torch.empty((256,1024,int(mem_block)), device=self.device)
 
