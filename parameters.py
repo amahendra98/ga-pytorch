@@ -16,7 +16,7 @@ K_NEAREST = 0.01
 'Training Parameters'
 SEED = 1234
 (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
-#FOLDER = 'results/two_p/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
+#FOLDER = 'results/two_parameter_model_testing/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
 #FOLDER = '/work/amm163/results/sweep_07'
 FOLDER = 'results/sweeps/sweep_07'
 DEVICE_LIST = ['cuda:0']

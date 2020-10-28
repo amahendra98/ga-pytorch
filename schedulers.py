@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 
 ' My Implementation of rate schedulers for training '
 
@@ -8,7 +9,7 @@ class base_scheduler(object):
             current: holds the current value as scheduled
             prior: holds the history of values reached over each epoch or call to scheduler '''
     def __init__(self, step_length, schedule):
-        self.schedule = schedule
+        self.schedule = deepcopy(schedule)
         self.current = self.param_from_schedule(0)
         self.prior = np.empty(step_length)
         self.prior[:] = np.nan

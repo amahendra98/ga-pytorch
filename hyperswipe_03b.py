@@ -5,8 +5,12 @@ if __name__ == '__main__':
     Trunc = [0.001,0.01,0.05,0.1,0.2,0.3,0.4]
     Pop = [4000,1000]
 
+    count = 0
     for t in Trunc:
         for p in Pop:
+            count += 1
+            if count <= 1:
+                continue
             flags = flag_reader.read_flag()
             flags.pop_size = p
             flags.trunc_threshold = t
