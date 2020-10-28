@@ -11,7 +11,7 @@ if __name__ == '__main__':
             flags.pop_size = p
             flags.trunc_threshold = t
             flags.device = ['cuda:1']
-            flags.folder = flags.folder+'/P{}_T{}_value_scheduler'
+            flags.folder = flags.folder+'/P{}_T{}_value_scheduler'.format(p,t)
             print(flags)
             ga = GA(flags)
             ga.run()
