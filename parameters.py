@@ -20,7 +20,7 @@ SEED = 1234
 #FOLDER = '/work/amm163/results/sweep_07'
 FOLDER = 'results/sweeps/sweep_07'
 DEVICE_LIST = ['cuda:0']
-SCHED_ARGS = ('variable length value scheduler', 5, [(0.05, 5), (0.02, 10), (0.015,10), (0.01, 10), (0.0075, 10),
+SCHED_ARGS = ('variable_length_value_scheduler', 5, [(0.05, 5), (0.02, 10), (0.015,10), (0.01, 10), (0.0075, 10),
                                                      (0.005, 10), (0.0025, 10), (0.001, 10)], 0.0005)
 
 'Gif Parameters'

@@ -9,44 +9,15 @@ import os
 import seaborn as sns; sns.set()
 import shutil
 
-class HMpoint(object):
-    """
-    This is a HeatMap point class where each object is a point in the heat map
-    properties:
-    1. BV_loss: best_validation_loss of this run
-    2. feature_1: feature_1 value
-    3. feature_2: feature_2 value, none is there is no feature 2
-    """
-
-    def __init__(self, bv_loss, f1, f2=None, f1_name='f1', f2_name='f2'):
-        self.bv_loss = bv_loss
-        self.feature_1 = f1
-        self.feature_2 = f2
-        self.f1_name = f1_name
-        self.f2_name = f2_name
-        # print(type(f1))
-
-    def to_dict(self):
-        return {
-            self.f1_name: self.feature_1,
-            self.f2_name: self.feature_2,
-            self.bv_loss: self.bv_loss
-        }
-
 class Data_Walker():
     def __init__(self, dir, thresh, skip=None, end=None):
         self.skip = skip
         self.end = end
         self.dir = dir
         self.thresh = thresh
-        self.Pop = [2000,1500,1000, 500]#[50, 100, 200, 500]
-        self.Trunc = [0.1,0.2,0.4,0.5]#[0.02, 0.05,0.1,0.15,0.2]
-        self.Mut = [0.02,0.01,0.001,0.1,0.5,1]
-        self.Insertion = [0.05, 0.3, 0.45] #[0.01,0.05,0.1,0.2,0.5]
-        self.K_Nearest = [0.1, 0.05, 0.005, 0.025] #self.Trunc
 
 
-    def exp_walk2(self, func_string):
+    def exp_walk(self, func_string):
         pre_frame = []
 
         for root,dirs,files in os.walk(self.dir):
@@ -69,78 +40,6 @@ class Data_Walker():
                     if d_row ==0:
                         continue
                     pre_frame.append(d_row)
-        return pre_frame
-
-        """
-            for file in files:
-            if file.find(".npz")!=-1:
-                print(root)
-                print(file)
-                os.remove(root+"/"+file)
-
-        """
-
-    def exp_walk1(self, func_string):
-        pre_frame =[]
-
-        for p in self.Pop:
-            folder = '/P{}_T{}_I{}_K{}'.format(p, TRUNC, INSERTION, K_NEAREST)
-            if func_string.find('e') != -1:
-                self.count_successful_gen(folder)
-            if func_string.find('h') != -1:
-                d_row = self.add_pc_data(folder)
-                pre_frame.append(d_row)
-
-        for t in self.Trunc:
-            folder = '/P{}_T{}_I{}_K{}'.format(POP_SIZE, t, INSERTION, K_NEAREST)
-            if func_string.find('e') != -1:
-                self.count_successful_gen(folder)
-            if func_string.find('h') != -1:
-                d_row = self.add_pc_data(folder)
-                pre_frame.append(d_row)
-
-        for i in self.Insertion:
-            folder = '/P{}_T{}_I{}_K{}'.format(POP_SIZE, TRUNC, i, K_NEAREST)
-            if func_string.find('e') != -1:
-                self.count_successful_gen(folder)
-            if func_string.find('h') != -1:
-                d_row = self.add_pc_data(folder)
-                pre_frame.append(d_row)
-
-        for k in self.K_Nearest:
-            folder = '/P{}_T{}_I{}_K{}'.format(POP_SIZE, TRUNC, INSERTION, k)
-            if func_string.find('e') != -1:
-                self.count_successful_gen(folder)
-            if func_string.find('h') != -1:
-                d_row = self.add_pc_data(folder)
-                pre_frame.append(d_row)
-
-        return pre_frame
-
-    def exp_walk(self, func_string):
-        count = 0
-        pre_frame = []
-
-        for p in self.Pop:
-            for t in self.Trunc:
-                for m in self.Mut:
-                    for i in self.Insertion:
-                        for k in self.K_Nearest:
-                            count += 1
-                            if count in self.skip:
-                                continue
-
-                            if count == self.end:
-                                break
-
-                            folder = "/P{}_T{}_M{}_I{}_K{}".format(p,t,m,i,k)
-
-                            if func_string.find('e') != -1:
-                                self.count_successful_gen(folder)
-                            if func_string.find('h') != -1:
-                                d_row = self.add_pc_data(folder)
-                                pre_frame.append(d_row)
-
         return pre_frame
 
 
@@ -170,28 +69,28 @@ class Data_Walker():
             print(p_dict,file=f)
 
     def add_pc_data(self, folder):
-        row = None
         try:
             with open(self.dir+folder+'/parameters.txt','r') as f:
                 content = f.read()
                 p_dict = eval(content)
-                lin = p_dict['linear']
-                layer = len(lin)
-                node = lin[1]
+                #lin = p_dict['linear']
+                #layer = len(lin)
+                #node = lin[1]
                 #row = [p_dict['pop_size'], p_dict['trunc_threshold'],p_dict['mutation_power'],p_dict['insertion'],p_dict['k']]
-                row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],node,layer,p_dict['best_validation_loss']]
+                #row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],node,layer,p_dict['best_validation_loss']]
+                row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['best_validation_loss']]
         except:
-            row = 0
-            return(row)
+            row = None
 
         return(row)
 
 
     def plot(self, func_string):
-        preFrame = self.exp_walk2(func_string)
+        preFrame = self.exp_walk(func_string)
 
         #cols = ['Pop', 'Truncation Ratio', 'Mutation', 'Insertion', 'K-nearest neighbor ratio', 'Metric']
-        cols = ['Pop', 'Truncation_ratio', 'Mutation', 'Nodes', 'Layers', 'Metric']
+        #cols = ['Pop', 'Truncation_ratio', 'Mutation', 'Nodes', 'Layers', 'Metric']
+        cols = ['Pop', 'Truncation_ratio', 'Validation_Loss']
         dFrame = pd.DataFrame(np.array(preFrame), columns=cols)
 
         self.pc(dFrame,cols)
@@ -199,11 +98,11 @@ class Data_Walker():
 
 
     def pc(self, dFrame,cols):
-        up_bound = 8.75
-        dplot = dFrame[dFrame.Metric.between(0, up_bound)]
-        fig = px.parallel_coordinates(dplot, color='Metric', dimensions=cols[0:5],
+        up_bound = 10
+        dplot = dFrame[dFrame.Validation_Loss.between(0, up_bound)]
+        fig = px.parallel_coordinates(dplot, color='Validation_Loss', dimensions=[cols[0],cols[1]],
                                       title="Restricted to Validation Loss below {}".format(up_bound))
-        fig.write_image(self.dir+'/imgs/below_{}_1.png'.format(up_bound))
+        #fig.write_image(self.dir+'/imgs/below_{}_1.png'.format(up_bound))
 
         '''
         for i in range(lw_bound,0,-1):
@@ -447,7 +346,7 @@ class Scatter_Animator():
 
 if __name__ == '__main__':
     #name = './ga-pytorch/results/sweeps/sweep_03'
-    name = './ga-pytorch/results/sweeps/sweep_04'
+    name = './ga-pytorch/results/sweeps/sweep_07'
     if len(sys.argv) > 1:
         func = sys.argv[1]
     if len(sys.argv) > 2:
@@ -467,7 +366,7 @@ if __name__ == '__main__':
         s.animate()
     if func =='e':
         d = Data_Walker(name, thresh, skip, end)
-        d.exp_walk2(func)
+        d.exp_walk(func)
     if func =='h' or func=='eh':
         d = Data_Walker(name, thresh, skip, end)
         d.plot(func)

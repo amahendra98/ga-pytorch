@@ -6,7 +6,7 @@ import flag_reader
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns;
+import seaborn as sns
 
 sns.set()
 from sklearn.neighbors import NearestNeighbors
@@ -64,8 +64,10 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
     HMpoint_list = []
     df_list = []  # make a list of data frame for further use
     for subdir, dirs, files in os.walk(HeatMap_dir):
+
         for file_name in files:
             if (file_name == 'parameters.txt'):
+                print('FOUND PARAMETERS FILE')
                 file_path = os.path.join(subdir, file_name)  # Get the file relative path from
                 # df = pd.read_csv(file_path, index_col=0)
                 with open(file_path, 'r') as f:
@@ -168,7 +170,9 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
 
 
 if __name__ == '__main__':
-    directory = 'results/sweeps/Heat_Maps/'
+    directory = './ga-pytorch/results/sweeps/sweep_07'
+    HeatMapBVL("Population", "Truncation", "Population vs. Truncation",HeatMap_dir=directory, save_name="Heatmap.png",
+               feature_1_name='pop_size',feature_2_name='trunc_threshold',heat_value_name='best_validaiton_loss')
 
     '''
     identifier = 'Mutation_0.01_Truncation-Ratio_0.3'
