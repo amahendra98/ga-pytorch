@@ -2,6 +2,21 @@ from ga import GA
 import flag_reader
 
 if __name__ == '__main__':
+    Trunc = [0.001,0.01,0.05,0.1,0.2,0.3,0.4]
+    Pop = [500]
+
+    for t in Trunc:
+        for p in Pop:
+            flags = flag_reader.read_flag()
+            flags.pop_size = p
+            flags.trunc_threshold = t
+            flags.device = ['cuda:0']
+            flags.folder = flags.folder+'/P{}_T{}_value_scheduler'
+            print(flags)
+            ga = GA(flags)
+            ga.run()
+
+    '''
     Trunc = [0.01]
     Pop = [500, 1000, 2000, 5000]
 
@@ -24,3 +39,4 @@ if __name__ == '__main__':
     print(f)
     ga = GA(f)
     ga.run()
+    '''

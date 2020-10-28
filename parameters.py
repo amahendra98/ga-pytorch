@@ -17,10 +17,11 @@ K_NEAREST = 0.01
 SEED = 1234
 (y,m,d,hr,min,s,x1,x2,x3) = time.localtime(time.time())
 #FOLDER = 'results/two_p/{}{}{}_{}{}{}'.format(y,m,d,hr,min,s)
-#FOLDER = '/work/amm163/results/sweep_06'
-FOLDER = 'results/sweeps/sweep_06'
+#FOLDER = '/work/amm163/results/sweep_07'
+FOLDER = 'results/sweeps/sweep_07'
 DEVICE_LIST = ['cuda:0']
-SCHED_ARGS = ('variable length value scheduler', 5, [(MUT,5), (0.02,20),(0.01,)])
+SCHED_ARGS = ('variable length value scheduler', 5, [(0.05, 5), (0.02, 10), (0.015,10), (0.01, 10), (0.0075, 10),
+                                                     (0.005, 10), (0.0025, 10), (0.001, 10)], 0.0005)
 
 'Gif Parameters'
 TIME = 10
