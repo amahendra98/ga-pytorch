@@ -73,14 +73,14 @@ class Data_Walker():
             with open(self.dir+folder+'/parameters.txt','r') as f:
                 content = f.read()
                 p_dict = eval(content)
-                #lin = p_dict['linear']
-                #layer = len(lin)
-                #node = lin[1]
+                lin = p_dict['linear']
+                layer = len(lin)
+                node = lin[1]
                 #row = [p_dict['pop_size'], p_dict['trunc_threshold'],p_dict['mutation_power'],p_dict['insertion'],p_dict['k']]
-                #row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],node,layer,p_dict['best_validation_loss']]
-                row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['best_validation_loss']]
+                row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['mutation_power'],node,layer,p_dict['best_validation_loss']]
+                #row = [p_dict['pop_size'], p_dict['trunc_threshold'], p_dict['best_validation_loss']]
         except:
-            row = None
+            row = 0
 
         return(row)
 
@@ -89,8 +89,8 @@ class Data_Walker():
         preFrame = self.exp_walk(func_string)
 
         #cols = ['Pop', 'Truncation Ratio', 'Mutation', 'Insertion', 'K-nearest neighbor ratio', 'Metric']
-        #cols = ['Pop', 'Truncation_ratio', 'Mutation', 'Nodes', 'Layers', 'Metric']
-        cols = ['Pop', 'Truncation_ratio', 'Validation_Loss']
+        cols = ['Pop', 'Truncation_ratio', 'Mutation', 'Nodes', 'Layers', 'Validation_Loss']
+        #cols = ['Pop', 'Truncation_ratio', 'Validation_Loss']
         dFrame = pd.DataFrame(np.array(preFrame), columns=cols)
 
         self.pc(dFrame,cols)
@@ -99,11 +99,28 @@ class Data_Walker():
 
     def pc(self, dFrame,cols):
         up_bound = 10
-        dplot = dFrame[dFrame.Validation_Loss.between(0, up_bound)]
-        fig = px.parallel_coordinates(dplot, color='Validation_Loss', dimensions=[cols[0],cols[1]],
+        dplot = dFrame[dFrame.Validation_Loss.between(0,up_bound)]
+        dplot = dplot[dplot['Mutation'] == 0.01]
+        fig = px.parallel_coordinates(dplot, color='Validation_Loss', dimensions=[cols[0],cols[1],cols[3],cols[4]],
                                       title="Restricted to Validation Loss below {}".format(up_bound))
-        #fig.write_image(self.dir+'/imgs/below_{}_1.png'.format(up_bound))
+        #fig.write_image(self.dir+'/imgs/below_{}_mut_{}.png'.format(up_bound, 0.01))
 
+        dplot = dplot.sort_values(['Validation_Loss'])
+        pd.set_option("display.max_rows", None, "display.max_columns", None)
+        print(dplot)
+
+        fig.show()
+
+        '''
+        dplot = dFrame
+        dplot = dplot[dplot['Mutation'] == 0.01]
+        for i in range(1,len(dplot)+1):
+            fig = px.parallel_coordinates(dplot, color='Validation_Loss', dimensions=[cols[0],cols[1],cols[3],cols[4]],
+                                          title="Plotting worst to best, training rank #{} subtracted".format(len(dplot)
+                                                                                                           -i + 1))
+            fig.write_image(self.dir+'/imgs/fig_mut_0.01_{}.jpg'.format(i))
+            dplot = dplot.drop(dplot['Validation_Loss'].idxmax())
+        '''
         '''
         for i in range(lw_bound,0,-1):
             dplot = dFrame[dFrame.Metric.between(i,483)]
@@ -111,8 +128,6 @@ class Data_Walker():
                                 title="Plot with threshold at {}, restricted to metrics above {}".format(self.thresh,i))
             fig.write_image(self.dir+'/imgs/fig_{}.jpg'.format(i))
         '''
-
-        fig.show()
 
     def heat_map(self, dFrame,cols):
         HeatMap_dir = self.dir+'/../Heat_Maps'
@@ -345,8 +360,8 @@ class Scatter_Animator():
         Scatter_animation.save("{}/Run.gif".format(self.name, self.name), fps=fps, writer='Pillow')
 
 if __name__ == '__main__':
-    #name = './ga-pytorch/results/sweeps/sweep_03'
-    name = './ga-pytorch/results/sweeps/sweep_07'
+    name = './ga-pytorch/results/sweeps/sweep_04'
+    #name = './ga-pytorch/results/sweeps/sweep_07'
     if len(sys.argv) > 1:
         func = sys.argv[1]
     if len(sys.argv) > 2:

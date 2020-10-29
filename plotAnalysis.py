@@ -51,6 +51,7 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
     :param feature_1_name: The name of the first feature that you would like to plot on the feature map
     :param feature_2_name: If you only want to draw the heatmap using 1 single dimension, just leave it as None
     """
+
     one_dimension_flag = False  # indication flag of whether it is a 1d or 2d plot to plot
     # Check the data integrity
     if (feature_1_name == None):
@@ -64,10 +65,8 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
     HMpoint_list = []
     df_list = []  # make a list of data frame for further use
     for subdir, dirs, files in os.walk(HeatMap_dir):
-
         for file_name in files:
             if (file_name == 'parameters.txt'):
-                print('FOUND PARAMETERS FILE')
                 file_path = os.path.join(subdir, file_name)  # Get the file relative path from
                 # df = pd.read_csv(file_path, index_col=0)
                 with open(file_path, 'r') as f:
@@ -76,9 +75,7 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
                 #flag_dict = vars(flag)
                 df = pd.DataFrame()
                 for k in flag_dict:
-                    print(k)
                     df[k] = pd.Series(str(flag_dict[k]), index=[0])
-                print(df)
                 if (one_dimension_flag):
                     # print(df[[heat_value_name, feature_1_name]])
                     # print(df[heat_value_name][0])
@@ -95,6 +92,22 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
                         print(type(df['conv_kernel_size']))
                         df['kernel_second'] = eval(df['conv_kernel_size'][0])[1]
                         df['kernel_first'] = eval(df['conv_kernel_size'][0])[0]
+                    if feature_1_name == 'nodes':
+                        lin = flag_dict['linear']
+                        n = lin[1]
+                        l = len(lin) - 2
+                        if l==1 and n==50:
+                            continue
+                        df['nodes'] = pd.Series(n, index=[0])
+                        df['layers'] = pd.Series(l, index=[0])
+
+                    p = flag_dict['pop_size']
+                    t = flag_dict['trunc_threshold']
+                    m = flag_dict['mutation_power']
+                    #if m != 0.01:
+                    #    continue
+                    if (p==1000 and t==0.001) or p<=1000 or t>=0.3:
+                        continue
                     df_list.append(df[[heat_value_name, feature_1_name, feature_2_name]])
                     HMpoint_list.append(HMpoint(float(df[heat_value_name][0]), eval(str(df[feature_1_name][0])),
                                                 eval(str(df[feature_2_name][0])), feature_1_name, feature_2_name))
@@ -170,9 +183,10 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
 
 
 if __name__ == '__main__':
-    directory = './ga-pytorch/results/sweeps/sweep_07'
-    HeatMapBVL("Population", "Truncation", "Population vs. Truncation",HeatMap_dir=directory, save_name="Heatmap.png",
-               feature_1_name='pop_size',feature_2_name='trunc_threshold',heat_value_name='best_validaiton_loss')
+    directory = 'results/sweeps/sweep_07'
+    HeatMapBVL("Population", "Truncation", "Population vs. Truncation",HeatMap_dir=directory,
+               save_name="Heatmap_sweep_07_Pop_Trunc_outlier_P5001000_t0.30.4.png",
+               feature_1_name='pop_size',feature_2_name='trunc_threshold',heat_value_name='best_validation_loss')
 
     '''
     identifier = 'Mutation_0.01_Truncation-Ratio_0.3'
@@ -181,6 +195,7 @@ if __name__ == '__main__':
                        feature_2_name='k', heat_value_name='suc_gen')
     '''
 
+    '''
     folders = os.listdir(directory)
     for f in folders:
         if f.find('Truncation') != -1:
@@ -197,3 +212,4 @@ if __name__ == '__main__':
             HeatMapBVL("Truncation Ratio", "K-Nearest Neighbor Ratio", 'Truncation Ratio vs. K-Nearest Neighbor',
                        HeatMap_dir=directory+'/'+f, save_name=f+'.png', feature_1_name='k',
                        feature_2_name='trunc_threshold', heat_value_name='suc_gen')
+    '''
