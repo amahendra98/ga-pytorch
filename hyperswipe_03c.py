@@ -16,6 +16,7 @@ if __name__ == '__main__':
             for t in Trunc:
                 for p in Pop:
                     f = flag_reader.read_flag()
+                    f.mutation_power = 0.01
                     m = f.mutation_power
                     name = 'T{}_M{}_P{}_L{}_N{}'.format(t,m,p,l,n)
 
@@ -27,7 +28,7 @@ if __name__ == '__main__':
                     f.linear = [n for j in range(l + 2)]
                     f.linear[0] = 2
                     f.linear[-1] = 300
-                    f.schedule_args = None
+                    f.schedule_args = [None, None]
                     f.generations = 500
                     f.device = ['cuda:0']
                     f.folder = '/work/amm163/results/sweep_04'+name
