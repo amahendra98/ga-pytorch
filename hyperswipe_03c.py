@@ -31,7 +31,7 @@ if __name__ == '__main__':
                     f.schedule_args = [None, None]
                     f.generations = 500
                     f.device = ['cuda:0']
-                    f.folder = '/work/amm163/results/sweep_04'+name
+                    f.folder = '/work/amm163/results/sweep_04/'+name
 
                     print(f)
                     ga = GA(f)
