@@ -4,7 +4,7 @@ import flag_reader
 
 if __name__ == '__main__':
     Layers = [1,2,3,4]
-    Nodes = [50,100,200,500]
+    Nodes = [100]
     Trunc = [0.001, 0.01, 0.1, 0.2,0.3,0.4]
     Pop = [5000,4000,3000,1000]
 
@@ -17,23 +17,24 @@ if __name__ == '__main__':
                         f.mutation_power = 0.01
                         m = f.mutation_power
 
-                        with open('sweep_07_dirs.txt', 'r') as f:
-                            History = eval(f.read())
+                        #with open('sweep_07_dirs.txt', 'r') as f:
+                        #    History = eval(f.read())
 
                         name = 'P{}_T{}_value_scheduler_{}'.format(p,t,c)
 
+                        '''
                         if name in History:
                             continue
 
                         History.append(name)
+                        with open('sweep_07_dirs.txt', 'w') as f:
+                            f.truncate()
+                            print(History, file=f)
+                        '''
 
                         f.pop_size = p
                         f.trunc_threshold = t
-                        f.linear = [n for j in range(l + 2)]
-                        f.linear[0] = 2
-                        f.linear[-1] = 300
-                        f.schedule_args = [None, None]
-                        f.generations = 500
+                        f.generations = 200
                         f.device = ['cuda:0']
                         f.folder = '/work/amm163/results/sweep_07/'+name
 
