@@ -10,8 +10,6 @@ class GA:
         self.max_gen = flags.generations
         devices = flags.device[0]
         pop_size = flags.pop_size
-        self.x_lim = flags.x_lim
-        self.y_lim = flags.y_lim
         self.name = flags.folder
         self.gen = 0
         self.sched = None
