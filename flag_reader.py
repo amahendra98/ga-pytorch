@@ -26,9 +26,6 @@ def read_flag():
     parser.add_argument('--k', type=float, help="kth nearest neighbor by percent Pop", default = K_NEAREST)
     parser.add_argument('--seed', type=int, default=SEED, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--folder', type=str, default=FOLDER, metavar='N',help='folder to store results')
-    parser.add_argument('--x-lim',nargs='+', type=int, default=XLIM, help='Gif X limit')
-    parser.add_argument('--y-lim', nargs='+', type=int, default=YLIM, help='Gif Y limit')
-    parser.add_argument('--gif-time', type=int, default=TIME, help='Gif total time')
     parser.add_argument('--schedule-args', type=tuple, default=SCHED_ARGS, help='Arguments to run scheduler')
     flags = parser.parse_args()
 

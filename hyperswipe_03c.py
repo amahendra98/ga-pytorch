@@ -29,11 +29,7 @@ if __name__ == '__main__':
 
                         f.pop_size = p
                         f.trunc_threshold = t
-                        f.linear = [n for j in range(l + 2)]
-                        f.linear[0] = 2
-                        f.linear[-1] = 300
-                        f.schedule_args = [None, None]
-                        f.generations = 500
+                        f.generations = 200
                         f.device = ['cuda:0']
                         f.folder = '/work/amm163/results/sweep_07/'+name
 
