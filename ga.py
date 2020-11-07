@@ -35,7 +35,7 @@ class GA:
         self.devices = devices #Creating single gpu version first
         self.worker = GPUWorker(flags)
 
-    def run(self):
+    def run(self, gen_start=0):
         ' DO GA ALGORITHM '
 
         ' Clear the space occupied by rmem (space was occupied to force pytorch to allocate enough memory for run'
@@ -45,7 +45,7 @@ class GA:
         start = time.time()
         print(self.name)
 
-        for gen in range(self.max_gen):
+        for gen in range(gen_start,self.max_gen):
             self.step()
 
         '''
@@ -86,6 +86,9 @@ class GA:
 
     def best_validation_loss(self):
         return self.worker.best_validation_loss()
+
+    def get_models(self):
+        return self.worker.get_models()
 
     def metric_center(self):
         ' General formula for measuring the symmetry and center of a run'

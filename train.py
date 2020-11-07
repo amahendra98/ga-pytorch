@@ -283,6 +283,10 @@ class GPUWorker(object):
     def best_validation_loss(self):
         return self.best_val
 
+    def get_models(self):
+        if len(self.models) > 0:
+            return self.models
+
     def novelty_f(self, gen):
         ' Calculates novelty score of all models in one function '
         # Elements in model

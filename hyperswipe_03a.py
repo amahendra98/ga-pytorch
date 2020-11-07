@@ -1,24 +1,33 @@
 from ga import GA
 import flag_reader
+import torch
 
 if __name__ == '__main__':
-    Trunc = [0.001,0.01,0.05,0.1,0.2,0.3,0.4]
-    Pop = [5000]
+    Trunc = [0.01]
+    Pop = [3000]
 
     count = 0
     for t in Trunc:
         for p in Pop:
             count += 1
-            if count <= 1:
-                continue
-            flags = flag_reader.read_flag()
-            flags.pop_size = p
-            flags.trunc_threshold = t
-            flags.device = ['cuda:1']
-            flags.folder = flags.folder+'/P{}_T{}_value_scheduler'.format(p,t)
-            print(flags)
-            ga = GA(flags)
-            ga.run()
+            for i in range(1):
+                if count <= 0:
+                    continue
+                flags = flag_reader.read_flag()
+                flags.pop_size = p
+                flags.trunc_threshold = t
+                flags.generations = 4000
+                flags.device = ['cuda:1']
+                flags.folder = 'results/2020-11-05/P{}_T{}_value_scheduler_end5'.format(p,t)
+                print(flags)
+                ga = GA(flags)
+                ga.run()
+                models = ga.get_models()
+
+                m_dict = {}
+                for i,model in enumerate(models):
+                    m_dict['model{}_state_dict'.format(i)] = model.state_dict()
+                torch.save(m_dict,flags.folder+'/final_population.pt')
 
     '''
     Thresh = [0.001,0.0005, 0.0015]

@@ -96,8 +96,8 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
                         lin = flag_dict['linear']
                         n = lin[1]
                         l = len(lin) - 2
-                        if l==1 and n==50:
-                            continue
+                        #if l==1 and n==50:
+                        #    continue
                         df['nodes'] = pd.Series(n, index=[0])
                         df['layers'] = pd.Series(l, index=[0])
 
@@ -106,7 +106,7 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
                     m = flag_dict['mutation_power']
                     #if m != 0.01:
                     #    continue
-                    if (p==1000 and t==0.001) or p<=1000 or t>=0.3:
+                    if p<=500:
                         continue
                     df_list.append(df[[heat_value_name, feature_1_name, feature_2_name]])
                     HMpoint_list.append(HMpoint(float(df[heat_value_name][0]), eval(str(df[feature_1_name][0])),
@@ -185,7 +185,7 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
 if __name__ == '__main__':
     directory = 'results/sweeps/sweep_07'
     HeatMapBVL("Population", "Truncation", "Population vs. Truncation",HeatMap_dir=directory,
-               save_name="Heatmap_sweep_07_Pop_Trunc_outlier_P5001000_t0.30.4.png",
+               save_name="Heatmap_sweep_07_Pop_Trunc_P500.png",
                feature_1_name='pop_size',feature_2_name='trunc_threshold',heat_value_name='best_validation_loss')
 
     '''
