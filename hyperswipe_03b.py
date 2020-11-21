@@ -2,7 +2,7 @@ from ga import GA
 import flag_reader
 
 if __name__ == '__main__':
-    Nodes = [50,100,200,500]
+    Nodes = [50,100,200,300]
     Layers = [4]
 
     Params1 = Nodes
@@ -12,9 +12,9 @@ if __name__ == '__main__':
     for p1 in Params1:
         for p2 in Params2:
             count += 1
+            if count <= 3:
+                continue
             for i in range(3):
-                if count <= 0:
-                    continue
                 flags = flag_reader.read_flag()
                 flags.pop_size = 3000
                 flags.trunc_threshold = 0.01
@@ -23,7 +23,7 @@ if __name__ == '__main__':
                 flags.linear[0] = 2
                 flags.linear[-1] = 300
                 flags.device = ['cuda:0']
-                flags.folder = 'results/2020-11-06/N{}_L{}'.format(p1,p2)
+                flags.folder = 'results/2020-11-06/N{}_L{}_run{}'.format(p1,p2,i)
                 print(flags)
                 ga = GA(flags)
                 ga.run()

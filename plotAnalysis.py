@@ -183,10 +183,10 @@ def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap
 
 
 if __name__ == '__main__':
-    directory = 'results/sweeps/sweep_07'
-    HeatMapBVL("Population", "Truncation", "Population vs. Truncation",HeatMap_dir=directory,
-               save_name="Heatmap_sweep_07_Pop_Trunc_P500.png",
-               feature_1_name='pop_size',feature_2_name='trunc_threshold',heat_value_name='best_validation_loss')
+    directory = 'results/2020-11-06'
+    HeatMapBVL("Nodes", "Layers", "Nodes vs. Layers",HeatMap_dir=directory,
+               save_name="Heatmap_2020-11-06_Nodes_Layers.png",
+               feature_1_name='nodes',feature_2_name='layers',heat_value_name='best_validation_loss')
 
     '''
     identifier = 'Mutation_0.01_Truncation-Ratio_0.3'

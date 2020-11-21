@@ -10,15 +10,15 @@ if __name__ == '__main__':
     for t in Trunc:
         for p in Pop:
             count += 1
-            for i in range(1):
+            for i in range(6,9):
                 if count <= 0:
                     continue
                 flags = flag_reader.read_flag()
                 flags.pop_size = p
                 flags.trunc_threshold = t
-                flags.generations = 4000
+                flags.generations = 3000
                 flags.device = ['cuda:1']
-                flags.folder = 'results/2020-11-05/P{}_T{}_value_scheduler_end5'.format(p,t)
+                flags.folder = 'results/2020-11-05/P{}_T{}_value_scheduler_end{}'.format(p,t,i)
                 print(flags)
                 ga = GA(flags)
                 ga.run()

@@ -69,9 +69,10 @@ class GPUWorker(object):
         print('Memory before model init: ', torch.cuda.memory_allocated(flags.device[0]) / 1000000000)
 
         ' Model generation '
-        with torch.no_grad():
-            for i in range(self.num_models):
-                self.models.append(lorentz_model(flags.linear).cuda(self.device))
+        #with torch.no_grad():
+        for i in range(self.num_models):
+            self.models.append(lorentz_model(flags.linear).cuda(self.device))
+            self.models[i].set_device(self.device)
 
             #self.furthest_model = [np.zeros_like(self.models[0].p_list())]
             #self.avg_tops = []
@@ -97,6 +98,9 @@ class GPUWorker(object):
         for i, (geometry, spectra) in enumerate(test_data_loader):
             self.val_data.append( (geometry.to(self.device),spectra.to(self.device)) )
 
+        self.grad_data = self.train_data[0][0][0:100,:]
+        #print(self.grad_data.size(), self.grad_data)
+
         print('Memory after data loading: ', torch.cuda.memory_allocated(flags.device[0])/1000000000)
 
         'Allocate additional memory if not enough reserved'
@@ -104,7 +108,7 @@ class GPUWorker(object):
         if torch.cuda.memory_reserved(flags.device[0])/1000000000 <= 9.5:
             print("IF NOT SKIPPED")
             mem = torch.cuda.memory_allocated(flags.device[0])
-            mem_av = 5*1000000000
+            mem_av = 9*1000000000
             mem_block = (mem_av - mem)/1000000
             self.rmem = torch.empty((256,1024,int(mem_block)), device=self.device)
 
@@ -206,35 +210,43 @@ class GPUWorker(object):
             if self.best_val > neg_val:
                 self.best_val = neg_val
 
-            ' Copy models over truncation barrier randomly into bottom models w/ mutation '
+            print(' Copy models over truncation barrier randomly into bottom models w/ mutation ')
             # Generate array of random indices corresponding to models above trunc barrier, and collect mutation arrays
-            rand_model_p = self.models[0].collect_mutations(self.mut,self.num_models,self.device)
+            #rand_model_p = self.models[0].collect_mutations(self.mut,self.num_models,self.device)
             rand_top = np.random.randint(self.trunc_threshold, size=self.num_models - self.trunc_threshold)
             for i in range(self.trunc_threshold,self.num_models):
+                print(i)
                 # Grab all truncated models
                 m = self.models[self.sorted[i]]
 
                 # Grab random top model
                 m_t = self.models[self.sorted[rand_top[i-self.trunc_threshold]]]
 
-                for (mp, mtp, mut) in zip(m.parameters(),m_t.parameters(), rand_model_p):
+                # for (mp, mtp, mut) in zip(m.parameters(),m_t.parameters(), rand_model_p):
+                    # mp.copy_(mtp).add_(mut[i])
+                for (mp, mtp) in zip(m.parameters(), m_t.parameters()):
                     # Copy top model parameters chosen into bottom module and mutate with random tensor of same size
                     # New random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
-                    mp.copy_(mtp).add_(mut[i])
+                    mp.copy_(mtp)
+
+                m = m.mutate(self.mut,self.grad_data,'SM-G')#'regular')
                 #self.mut_gen_idx[gen][rand_top[i-self.trunc_threshold]].append(m.p_list())
 
-            ' Mutate top models that are not champion '
+            print(' Mutate top models that are not champion ')
             for i in range(1,self.trunc_threshold):
+                print(i)
                 # Mutate all elite models except champion
                 m = self.models[self.sorted[i]]
                 #m_cpu = m.p_list()
                 #self.avg_tops[gen] += m_cpu
                 #if np.linalg.norm(m_cpu) > np.linalg.norm(self.furthest_model[gen]):
                 #    self.furthest_model[gen] = m_cpu
-                for (mp,mut) in zip(m.parameters(),rand_model_p):
+                # for (mp,mut) in zip(m.parameters(),rand_model_p):
+                    # mp.add_(mut[i])
                     # Add random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
-                    mp.add_(mut[i])
                 #self.mut_gen_idx[gen][i].append(m.p_list())
+
+                m = m.mutate(self.mut,self.grad_data,'SM-G')#'regular')
 
             m = self.models[self.sorted[0]]
             #m_cpu = m.p_list()
