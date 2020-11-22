@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --output out/output01.err                                                   # output log file
-#SBATCH -e out/error01.err                                                   # error log file
+#SBATCH --output ../out/output01.err                                                   # output log file
+#SBATCH -e ../out/error01.err                                                   # error log file
 #SBATCH --mem=40G                                                      # request 40G memory
 #SBATCH -c 1                                                           # request 6 gpu cores                                    
 #SBATCH -p collinslab                                     # request 1 gpu for this job
@@ -14,7 +14,7 @@ export LD_LIBRARY_PATH=/opt/apps/rhel7/cudnn/lib64:$LD_LIBRARY_PATH
 export PYTHONPATH=$PYTHONPATH:/hpc/home/amm163/ga-ns/
 
 # execute my file
-python main.py
+python ../main.py
 # python hyperswipe_03c.py
 # python utils/get_mask.py
 # python utils/train_test_split.py

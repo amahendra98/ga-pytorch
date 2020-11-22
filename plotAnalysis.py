@@ -7,9 +7,9 @@ from matplotlib.offsetbox import AnchoredText
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
+#import seaborn as sns
 
-sns.set()
+#sns.set()
 from sklearn.neighbors import NearestNeighbors
 from pandas.plotting import table
 from scipy.spatial import distance_matrix
