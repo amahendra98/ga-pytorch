@@ -13,7 +13,6 @@ if __name__ == '__main__':
         name = 0.5
 
     f = flag_reader.read_flag()
-    f.pop_size = 10
     t = f.trunc_threshold
     m = f.mutation_power
     p = f.pop_size
