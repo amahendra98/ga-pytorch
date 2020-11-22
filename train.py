@@ -275,7 +275,7 @@ class GPUWorker(object):
             logit = self.models[self.sorted[0]](t)[0][0].cpu().numpy()
             f, ax = compare_spectra(logit,labels)
             self.writer.add_figure(tag='Test ' + str(j) + ') T Sample Spectrum'.format(1), figure=f, global_step=gen)
-            plt.close(f)
+            plt.close('all')
 
     def fitness_f(self, x, y, err_ceil=100):
         ' General Fitness Function Calculation '
@@ -287,7 +287,7 @@ class GPUWorker(object):
         loss[loss != loss] = err_ceil
         return torch.neg(loss)
 
-    def save_plots(self,gen,rate=50,plot_arr=[0,9,90]):
+    """def save_plots(self,gen,rate=50,plot_arr=[0,9,90]):
         ' Plots champion, worst elite, and worst graph against each graph indexed from the raw training data '
         if gen % rate == 0:
             fig = plt.figure()
@@ -305,7 +305,7 @@ class GPUWorker(object):
                 ax.plot(np.linspace(0.5, 5, 300), champ_out[0].cpu().numpy()[0], color='tab:blue')
                 ax.plot(np.linspace(0.5, 5, 300), s[idx].cpu().numpy(), color='tab:orange')
 
-            self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)
+            self.writer.add_figure("{}_champ_worstElite_worst".format(gen), fig)"""
 
     def best_validation_loss(self):
         return self.best_val
