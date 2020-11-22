@@ -177,14 +177,14 @@ class lorentz_model(nn.Module):
     def mutate_plain(self,mag=0.05, **kwargs):
         # do_policy_check = False
         params = self.extract_parameters()
-        print(mag)
+        # print(mag)
         delta = torch.randn(*params.shape, dtype=torch.float32, device=self.device) * mag
         new_params = params + delta
 
         #diff = np.sqrt(((new_params - params) ** 2).sum())
         diff = torch.sqrt(torch.sum((new_params - params) ** 2))
 
-        print("Divergence: ", diff)
+        # print("Divergence: ", diff)
 
         # if do_policy_check:
         #     output_dist = check_policy_change(params, new_params, kwargs['states'])

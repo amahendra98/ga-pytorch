@@ -1,7 +1,9 @@
 import torch
+import sys
 from models import lorentz_model
 from models import two_p_model
 from models import iris_model
+from plotAnalysis import compare_spectra
 import datareader
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
@@ -13,6 +15,7 @@ class GPUWorker(object):
     def __init__(self,flags):
         ' Constructor downloads parameters and allocates memory for models and data'
         # User specified parameters
+        self.safe_mut = flags.safe_mutation
         self.device = torch.device(flags.device[0])
         self.insertion_probability = flags.insertion
         self.novelty_weight = torch.tensor([flags.novelty_weight], device=self.device) # Determines how much importance novelty has vs. fitness in ga
@@ -21,7 +24,7 @@ class GPUWorker(object):
         self.k = int(self.num_models*flags.k) # kth nearest neighbors in novelty calculation
         self.num_batches = flags.num_batches
         self.mut = flags.mutation_power
-        self.max_gen = flags.generations
+        self.max_gen = flags.gen_end
         if flags.top == 0 and flags.trunc_threshold != 0:
             self.trunc_threshold = int(flags.trunc_threshold*self.num_models)
             if self.trunc_threshold == 0:
@@ -34,7 +37,7 @@ class GPUWorker(object):
         self.writer = SummaryWriter(flags.folder)
 
         # Parameters to hold memory
-        self.best_val = np.inf
+        self.best_val = torch.tensor(np.array([np.inf]), device=self.device)
         self.models = []
         self.train_data = []
         self.test_data = []
@@ -86,7 +89,7 @@ class GPUWorker(object):
                                                                    batch_size=0,
                                                                    set_size=self.num_batches,
                                                                    normalize_input=True,
-                                                                   data_dir='./',
+                                                                   data_dir=sys.path[0],
                                                                    test_ratio=0.2)
 
         for i, (geometry, spectra) in enumerate(train_data_loader):
@@ -210,12 +213,12 @@ class GPUWorker(object):
             if self.best_val > neg_val:
                 self.best_val = neg_val
 
-            print(' Copy models over truncation barrier randomly into bottom models w/ mutation ')
+            #print(' Copy models over truncation barrier randomly into bottom models w/ mutation ')
             # Generate array of random indices corresponding to models above trunc barrier, and collect mutation arrays
             #rand_model_p = self.models[0].collect_mutations(self.mut,self.num_models,self.device)
             rand_top = np.random.randint(self.trunc_threshold, size=self.num_models - self.trunc_threshold)
             for i in range(self.trunc_threshold,self.num_models):
-                print(i)
+                #print(i)
                 # Grab all truncated models
                 m = self.models[self.sorted[i]]
 
@@ -229,12 +232,12 @@ class GPUWorker(object):
                     # New random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                     mp.copy_(mtp)
 
-                m = m.mutate(self.mut,self.grad_data,'SM-G')#'regular')
+                m = m.mutate(self.mut,self.grad_data,self.safe_mut)
                 #self.mut_gen_idx[gen][rand_top[i-self.trunc_threshold]].append(m.p_list())
 
-            print(' Mutate top models that are not champion ')
+            # print(' Mutate top models that are not champion ')
             for i in range(1,self.trunc_threshold):
-                print(i)
+                # print(i)
                 # Mutate all elite models except champion
                 m = self.models[self.sorted[i]]
                 #m_cpu = m.p_list()
@@ -246,7 +249,7 @@ class GPUWorker(object):
                     # Add random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                 #self.mut_gen_idx[gen][i].append(m.p_list())
 
-                m = m.mutate(self.mut,self.grad_data,'SM-G')#'regular')
+                m = m.mutate(self.mut,self.grad_data,self.safe_mut)
 
             m = self.models[self.sorted[0]]
             #m_cpu = m.p_list()
@@ -259,7 +262,20 @@ class GPUWorker(object):
 
             ' Synchronize all operations so that models all mutate and copy before next generation'
             torch.cuda.synchronize(self.device)
-            self.save_plots(gen,plot_arr=[0,9,90])
+            self.save_plots_2(gen)
+
+    def save_plots_2(self, gen, rate=20):
+        if gen%rate != 0:
+            return
+
+        g, s = self.train_data[0]
+        for j in range(10):
+            t = g[j].view((1, 2))
+            labels = s[j].cpu().numpy()
+            logit = self.models[self.sorted[0]](t)[0][0].cpu().numpy()
+            f, ax = compare_spectra(logit,labels)
+            self.writer.add_figure(tag='Test ' + str(j) + ') T Sample Spectrum'.format(1), figure=f, global_step=gen)
+            plt.close(f)
 
     def fitness_f(self, x, y, err_ceil=100):
         ' General Fitness Function Calculation '
@@ -270,7 +286,6 @@ class GPUWorker(object):
         loss = torch.div(loss, s)
         loss[loss != loss] = err_ceil
         return torch.neg(loss)
-
 
     def save_plots(self,gen,rate=50,plot_arr=[0,9,90]):
         ' Plots champion, worst elite, and worst graph against each graph indexed from the raw training data '

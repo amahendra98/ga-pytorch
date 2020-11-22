@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0,sys.path[0]+'\\..')
+
 from ga import GA
 import flag_reader
 

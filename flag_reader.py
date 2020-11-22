@@ -1,6 +1,7 @@
 import argparse
 import pickle
 import os
+from numpy import inf
 import numpy as np
 
 # Own module
@@ -11,8 +12,10 @@ def read_flag():
 
     parser.add_argument('--device', type=str, help='Device list for model storage', default = DEVICE_LIST)
     parser.add_argument('--pop-size', type=int, help='Population size.', default=POP_SIZE)
-    parser.add_argument('--generations', type=int, default=GENERATIONS, metavar='N',
-                            help='number of generations to train (default: 1000)')
+    parser.add_argument('--gen-end', type=int, default=GEN_END, metavar='N',
+                            help='number of generations to train')
+    parser.add_argument('--gen-start', type=int, default=GEN_START, metavar='N',
+                            help='number of generations to train')
     parser.add_argument('--linear', type=list, default=LINEAR, metavar='Model layer units')
     parser.add_argument('--top', type=int, default=TOP, metavar='N',
                             help='numer of top elites that should be re-evaluated')
@@ -27,39 +30,53 @@ def read_flag():
     parser.add_argument('--seed', type=int, default=SEED, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--folder', type=str, default=FOLDER, metavar='N',help='folder to store results')
     parser.add_argument('--schedule-args', type=tuple, default=SCHED_ARGS, help='Arguments to run scheduler')
-    flags = parser.parse_args()
 
+    parser.add_argument('--save_BVL', type=int, default=BVL, help='How often best validation loss should be saved. 0 '
+                                                                  'or inf mean only save at end')
+    parser.add_argument('--save_time', type=int, default=TIME, help='How often best validation loss should be saved. '
+                                                                      '0 or inf mean only save at end')
+    parser.add_argument('--save_models', type=int, default=MOD, help='How often best validation loss should be saved.'
+                                                                       '0 means never save, inf means only save at end')
+    parser.add_argument('--safe-mutation', type=str, default=SAFE_MUT, help='Type of safe mutation to run i.e. regular,'
+                                                                            'SM-G, SM-G-SO')
+
+    flags = parser.parse_args()
     return flags
 
+def write_flags_to_file(flags, save_dir):
+    ' Create a parameters.txt file that holds critical run infromation'
+    flags_dict = vars(flags)
+    with open(os.path.join(save_dir, 'parameters.txt'), 'w') as f:
+        print(flags_dict, file=f)
+    save_flags(flags, save_dir=save_dir)
+
+
+# TODO: Consider caching each add_to_file call and forgoing the file read step
+def add_to_file(save_dir, BVL=None, time=None):
+    ' Store best validation loss and/or time so far in parameters.txt under best_validation_loss and time'
+
+    path = os.path.join(save_dir, 'parameters.txt')
+
+    with open(path, 'r') as f:
+        flags_dict = eval(f.read())
+
+    with open(path, 'w') as f:
+        if not BVL == None:
+            flags_dict['best_validation_loss'] = BVL
+
+        if not time == None:
+            flags_dict['time'] = time
+
+        print(flags_dict, file=f)
+
+
 def save_flags(flags, save_dir, save_file="flags.obj"):
+    ' Save flags as pickle-able object'
     with open(os.path.join(save_dir, save_file),'wb') as f:          # Open the file
         pickle.dump(flags, f)               # Use Pickle to serialize the object
 
 def load_flags(save_dir, save_file="flags.obj"):
+    ' Load flags.obj (pickle-able flags object) '
     with open(os.path.join(save_dir, save_file), 'rb') as f:  # Open the file
         flags = pickle.load(f)  # Use pickle to inflate the obj back to RAM
     return flags
-
-def write_flags_and_BVE(flags, metric, save_dir):
-    """
-    The function that is usually executed at the end of the training where the flags and the best validation loss are recorded
-    They are put in the folder that called this function and save as "parameters.txt"
-    This parameter.txt is also attached to the generated email
-    :param flags: The flags struct containing all the parameters
-    :param best_validation_loss: The best_validation_loss recorded in a training
-    :return: None
-    """
-    # To avoid terrible looking shape of y_range
-    #yrange = flags.y_range
-    # yrange_str = str(yrange[0]) + ' to ' + str(yrange[-1])
-    #yrange_str = [yrange[0], yrange[-1]]
-    flags_dict = vars(flags)
-    flags_dict_copy = flags_dict.copy()  # in order to not corrupt the original data strucutre
-    #flags_dict_copy['y_range'] = yrange_str  # Change the y range to be acceptable long string
-    flags_dict_copy['best_validation_loss'] = float(metric.cpu().numpy())  # Append the metric
-    # Convert the dictionary into pandas data frame which is easier to handle with and write read
-    print(flags_dict_copy)
-    with open(os.path.join(save_dir, 'parameters.txt'), 'w') as f:
-        print(flags_dict_copy, file=f)
-    # Pickle the obj
-    save_flags(flags, save_dir=save_dir)

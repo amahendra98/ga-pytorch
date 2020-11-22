@@ -1,5 +1,7 @@
+import sys
+sys.path.insert(0, sys.path[0] + '\\..')
+
 from ga import GA
-import os
 import flag_reader
 
 if __name__ == '__main__':

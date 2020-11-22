@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib
 import flag_reader
+from matplotlib.offsetbox import AnchoredText
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -39,6 +40,53 @@ class HMpoint(object):
             self.bv_loss: self.bv_loss
         }
 
+def compare_spectra(Ypred, Ytruth, xmin=0.5, xmax=5, num_points=300, T=None, title=None, figsize=[10, 5],
+                    E1=None, E2=None, N=None, K=None, eps_inf=None, label_y1='Pred', label_y2='Truth'):
+    """
+    Function to plot the comparison for predicted spectra and truth spectra
+    :param Ypred:  Predicted spectra, this should be a list of number of dimension 300, numpy
+    :param Ytruth:  Truth spectra, this should be a list of number of dimension 300, numpy
+    :param title: The title of the plot, usually it comes with the time
+    :param figsize: The figure size of the plot
+    :return: The identifier of the figure
+    """
+    # Make the frequency points
+    frequency = xmin + (xmax - xmin) / num_points * np.arange(num_points)
+    f, ax = plt.subplots(figsize=figsize)
+    # f = plt.figure(figsize=figsize)
+    plt.plot(frequency, Ypred, label=label_y1)
+    plt.plot(frequency, Ytruth, label=label_y2)
+    mse_loss = np.mean((Ypred - Ytruth) ** 2)
+    if T is not None:
+        plt.plot(frequency, T, linewidth=1, linestyle='--')
+    if E2 is not None:
+        for i in range(np.shape(E2)[0]):
+            plt.plot(frequency, E2[i, :], linewidth=1, linestyle=':', label="E2" + str(i))
+    if E1 is not None:
+        for i in range(np.shape(E1)[0]):
+            plt.plot(frequency, E1[i, :], linewidth=1, linestyle='-', label="E1" + str(i))
+    if N is not None:
+        plt.plot(frequency, N, linewidth=1, linestyle=':', label="N")
+    if K is not None:
+        plt.plot(frequency, K, linewidth=1, linestyle='-', label="K")
+    if eps_inf is not None:
+        plt.plot(frequency, np.ones(np.shape(frequency)) * eps_inf, label="eps_inf")
+    # plt.ylim([0, 1])
+
+    at = AnchoredText("MSE: " + str(np.round(mse_loss, 6)),
+                      prop=dict(size=15), frameon=True,
+                      loc='lower right',
+                      )
+    at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+    ax.add_artist(at)
+
+    plt.legend()
+    plt.xlabel("Frequency (THz)")
+    plt.ylabel("Transmission")
+    plt.grid(b=None)
+    if title is not None:
+        plt.title(title)
+    return f,ax
 
 def HeatMapBVL(plot_x_name, plot_y_name, title, save_name='HeatMap.png', HeatMap_dir='HeatMap',
                feature_1_name=None, feature_2_name=None,

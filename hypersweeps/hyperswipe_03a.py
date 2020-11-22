@@ -1,10 +1,12 @@
+import sys
+sys.path.insert(0,sys.path[0]+'\\..')
+
 from ga import GA
 import flag_reader
-import torch
 
 if __name__ == '__main__':
     Trunc = [0.01]
-    Pop = [3000]
+    Pop = [10]
 
     count = 0
     for t in Trunc:
@@ -22,12 +24,6 @@ if __name__ == '__main__':
                 print(flags)
                 ga = GA(flags)
                 ga.run()
-                models = ga.get_models()
-
-                m_dict = {}
-                for i,model in enumerate(models):
-                    m_dict['model{}_state_dict'.format(i)] = model.state_dict()
-                torch.save(m_dict,flags.folder+'/final_population.pt')
 
     '''
     Thresh = [0.001,0.0005, 0.0015]

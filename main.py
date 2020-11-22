@@ -10,17 +10,15 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         name = sys.argv[1]
     else:
-        name = 1
+        name = 0.5
 
     f = flag_reader.read_flag()
+    f.pop_size = 10
     t = f.trunc_threshold
     m = f.mutation_power
     p = f.pop_size
     f.mutation_power = name
-
-    #('generational_scheduler', 10, [(MUT,0), (0.02,20),(0.01,60)])
-
-    f.folder = f.folder+"/tmpr".format(t,p)
+    f.folder = f.folder+"/Safe-Mutation-Testing"
 
     dirs = listdir(f.folder)
     trial = 0
@@ -29,7 +27,7 @@ if __name__ == '__main__':
             trial += 1
     f.folder = f.folder + "/SMG_v0_P100_M{}_{}".format(name,trial)
 
-    f.device=['cuda:1']
+    #f.device=['cuda:1']
     print(f)
     ga = GA(f)
     ga.run()
