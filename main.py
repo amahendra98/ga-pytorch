@@ -22,9 +22,9 @@ if __name__ == '__main__':
     dirs = listdir(f.folder)
     trial = 0
     for dir in dirs:
-        if dir.count("SMG_v0_P100_M{}_".format(name)) > 0:
+        if dir.count("SMG_SCHED{}_v1_".format(name)) > 0:
             trial += 1
-    f.folder = f.folder + "/SMG_v0_P100_M{}_{}".format(name,trial)
+    f.folder = f.folder + "/SMG_SCHED{}_v1_P100_{}".format(name,trial)
 
     #f.device=['cuda:1']
     print(f)

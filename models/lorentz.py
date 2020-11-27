@@ -8,10 +8,11 @@ from torch.nn.parameter import Parameter as P
 from torch import pow, add, mul, div
 import numpy as np
 import random
+from TimeClock import TimeClock
 
 
 class lorentz_model(nn.Module):
-    def __init__(self, linear):
+    def __init__(self, linear,safe_mutation=None):
         super(lorentz_model,self).__init__()
         self.linear = linear[0:-1]
         self.num_spec_point = linear[-1]
@@ -19,6 +20,16 @@ class lorentz_model(nn.Module):
         self.freq_low = 0.5
         self.freq_high = 5
         self.device = None
+        self.sens = 1
+
+        if safe_mutation == None:
+            self.sensitivity = self.plain
+        elif safe_mutation == 'SM-G-Sum':
+            self.sensitivity = self.SM_G_Sum
+        elif safe_mutation == 'SM-R':
+            # This function does not actually output sensitivity, mutation is used to handle sensitivty
+            self.sensitivity = self.plain
+
 
         self.linears = nn.ModuleList([])
         #self.bn_linears = nn.ModuleList([])
@@ -84,6 +95,38 @@ class lorentz_model(nn.Module):
 
     def p_list(self):
         return lorentz_model.bc_func(self).cpu().numpy()
+
+    def plain(self, *args):
+        return 1
+
+    def SM_G_Sum(self, states):
+        with torch.enable_grad():
+            verification_states = Variable(states, requires_grad=False)
+            old_policy = self.__call__(verification_states)[0]
+
+            num_outputs = old_policy.size()[1]
+
+            tot_size = self.count_parameters()
+            jacobian = torch.zeros(num_outputs, tot_size, device=self.device)
+            grad_output = torch.zeros(*old_policy.size(), device=self.device)
+
+            for i in range(num_outputs):
+                self.zero_grad()
+                grad_output.zero_()
+                grad_output[:, i] = 1.0
+                old_policy.backward(grad_output,retain_graph=True)
+                jacobian[i] = self.extract_grad()
+            scaling = torch.sqrt(torch.sum(jacobian ** 2, 0))
+            # Avoid divide by zero error
+            # (intuition: don't change parameter if it doesn't matter)
+            scaling[scaling == 0] = 1.0
+
+            # Avoid straying too far from first-order approx
+            # (intuition: don't let scaling factor become too enormous)
+            scaling[scaling < 0.01] = 0.01
+            self.sens = scaling
+
+
 
     #From Safe Mutations Code
     #function to return current pytorch gradient in same order as genome's flattened parameter vector
@@ -152,15 +195,17 @@ class lorentz_model(nn.Module):
         return count
 
 
-    # TODO: Fix up Mutate function to reflect non-individual based format and other modifications
-    def mutate(self,mag,states, mutation='regular'):
-        with torch.enable_grad():
-            #plain mutation is normal ES-style mutation
-            if mutation=='regular':
-                self.mutate_plain(mag)
-            elif mutation.count("SM-G")>0:
-                #smog_target is target-based smog where we aim to perturb outputs
-                self.mutate_sm_g(mutation,states,mag)
+    # #TODO: Fix up Mutate function to reflect non-individual based format and other modifications
+    # def mutate(self,mag,states, mutation='regular'):
+    #     with torch.enable_grad():
+    #         #plain mutation is normal ES-style mutation
+    #         if mutation=='regular':
+    #             self.mutate_plain(mag)
+    #         elif mutation.count("SM-G")>0:
+    #             #smog_target is target-based smog where we aim to perturb outputs
+    #             self.mutate_sm_g(mutation,states,mag)
+    #         elif mutation.count("SM-R")>0:
+    #             self.mutate_sm_r(states,mag)
 
             #smog_grad is TRPO-based smog where we attempt to induce limited policy change
         # elif mutation.count("SM-R")>0:
@@ -170,18 +215,18 @@ class lorentz_model(nn.Module):
         #             individual.env,
         #             states=self.states,
         #             **kwargs)
-            else:
-                assert False
+        #     else:
+        #         assert False
 
 
-    def mutate_plain(self,mag=0.05, **kwargs):
-        # do_policy_check = False
+    def mutate(self,mag=0.05, **kwargs):
         params = self.extract_parameters()
-        # print(mag)
-        delta = torch.randn(*params.shape, dtype=torch.float32, device=self.device) * mag
+        delta = torch.mul(torch.randn(*params.shape, dtype=torch.float32, device=self.device),mag)
+        delta /= self.sens
+        weight_clip = 0.2
+        delta = torch.clamp(delta,-weight_clip, weight_clip)
         new_params = params + delta
 
-        #diff = np.sqrt(((new_params - params) ** 2).sum())
         diff = torch.sqrt(torch.sum((new_params - params) ** 2))
 
         # print("Divergence: ", diff)
@@ -196,16 +241,13 @@ class lorentz_model(nn.Module):
         self.inject_parameters(new_params)
 
     def mutate_sm_r(self,
-                    params,
-                    #model,
-                    # env,
-                    # verbose=True,
+                    # params,
                     states=None,
-                    power=0.01):
+                    power=0.05):
         # global state_archive
 
         #model.inject_parameters(params.copy())
-        self.inject_parameters(params.copy())
+        params = self.extract_parameters()
 
         # if states == None:
         #     states = state_archive
@@ -221,7 +263,7 @@ class lorentz_model(nn.Module):
 
         ' Pass verification states through policy to get output = old policy'
         verification_states = Variable(states, requires_grad=False)
-        old_policy = self.__call__(verification_states)
+        old_policy = self.__call__(verification_states)[0]
         # old_policy = model(verification_states)
         #old_policy = output.data.numpy()
 
@@ -234,13 +276,16 @@ class lorentz_model(nn.Module):
             self.inject_parameters(new_params)
 
             #output = model(verification_states).data.numpy()
-            output = self.__call__(verification_states)
+            output = self.__call__(verification_states)[0]
 
             #change = ((output - old_policy) ** 2).mean()
-            change = torch.mean((output - old_policy) ** 2)
+            change = torch.mean(torch.pow(torch.sub(output,old_policy),2))
+
             if raw:
                 return change
-            return (change - threshold) ** 2
+
+            result = (change - threshold) ** 2
+            return result.cpu().detach().numpy()
 
         mult = minimize_scalar(search_error, tol=0.01 ** 2, options={'maxiter': search_rounds, 'disp': True})
         new_params = params + delta * mult.x
@@ -251,9 +296,9 @@ class lorentz_model(nn.Module):
         "SM-R scaling factor:", mult.x
         # diff = np.sqrt(((new_params - params) ** 2).sum())
         # print("mutation size: ", diff)
-        diff = torch.sqrt(torch.sum((new_params - params) ** 2))
-        print("mutation size: Are these dimensions righ? ", diff)
-        return new_params
+        #diff = torch.sqrt(torch.sum((new_params - params) ** 2))
+        #print("mutation size: Are these dimensions righ? ", diff)
+        self.inject_parameters(new_params)
 
     # def check_policy_change(p1, p2, states):
     #     model.inject_parameters(p1.copy())
@@ -280,7 +325,10 @@ class lorentz_model(nn.Module):
         # global state_archive
 
         # model.inject_parameters(params.copy())
+        #Clock = TimeClock()
+        #Clock.drop_pole(name='start extract parameters')
         params = self.extract_parameters()
+        #Clock.drop_pole(name='end extract parameters')
 
         # if no states passed in, use global state archive
         # if states == None:
@@ -294,7 +342,9 @@ class lorentz_model(nn.Module):
 
         verification_states = Variable(states, requires_grad=False)
         #old_policy = model(verification_states)
+        #Clock.drop_pole(name='start policy evaluation')
         old_policy = self.__call__(verification_states)[0]
+        #Clock.drop_pole(name='end policy evaluation')
 
         # run experiences through model
         # NOTE: for efficiency, could cache these during actual evalution instead of recalculating
@@ -314,7 +364,9 @@ class lorentz_model(nn.Module):
 
         # generate normally-distributed perturbation
         #delta = np.random.randn(*params.shape).astype(np.float32) * power
+        #Clock.drop_pole(name='Start allocate delta')
         delta = torch.mul(torch.randn(*(params.shape), requires_grad=False,device=self.device), power)
+        #Clock.drop_pole(name='End allocate delta')
 
         if second_order:
             print
@@ -340,21 +392,37 @@ class lorentz_model(nn.Module):
             scaling = torch.sqrt(torch.abs(sensitivity).data)
 
         elif not abs_gradient:
+            #Clock.drop_pole(name='start SM-G-SUM')
             #print
             "SM-G-SUM"
             tot_size = self.count_parameters()
             jacobian = torch.zeros(num_outputs, tot_size, device=self.device)
             grad_output = torch.zeros(*old_policy.size(), device=self.device)
+            #Clock.drop_pole(name='Finish allocating memory and counting params, Start for loop')
 
+            #Clock = TimeClock()
             for i in range(num_outputs):
+                #Clock.drop_pole(name='zero_grad')
                 self.zero_grad()
+                #Clock.drop_pole(name='grad_output zero')
                 grad_output.zero_()
+                #Clock.drop_pole(name='backward')
                 grad_output[:, i] = 1.0
+                s = time.time()
                 old_policy.backward(grad_output, retain_graph=True) #HAD RETAIN_VARIABLES! pytorch forum says retain_graph is newer version of it
+                e = time.time()
+                print(e -s)
+                #Clock.drop_pole(name='Jacobian')
                 jacobian[i] = self.extract_grad()
+                #Clock.drop_pole(name='End')
+
+            #Clock.report()
+
+            #Clock.drop_pole(name='End for loop, start scaling computation')
 
             #scaling = torch.sqrt((jacobian ** 2).sum(0))
             scaling = torch.sqrt(torch.sum(jacobian ** 2,0))
+            #Clock.drop_pole(name='end SM-G-SUM')
 
         else:
             print
@@ -398,7 +466,9 @@ class lorentz_model(nn.Module):
         new_params = params + delta
 
         #model.inject_parameters(new_params)
+        #Clock.drop_pole(name='Parameter injection')
         self.inject_parameters(new_params)
+        #Clock.drop_pole(name='end Parameter Injection')
         #old_policy = old_policy.data.numpy()
 
         # restrict how far any dimension can vary in one mutational step
@@ -466,6 +536,8 @@ class lorentz_model(nn.Module):
 
         #return new_params
         self.inject_parameters(new_params)
+        #Clock.drop_pole(name='end of function')
+        #Clock.report()
 
 
 if __name__ == '__main__':

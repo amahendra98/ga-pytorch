@@ -74,7 +74,7 @@ class GPUWorker(object):
         ' Model generation '
         #with torch.no_grad():
         for i in range(self.num_models):
-            self.models.append(lorentz_model(flags.linear).cuda(self.device))
+            self.models.append(lorentz_model(flags.linear, flags.safe_mutation).cuda(self.device))
             self.models[i].set_device(self.device)
 
             #self.furthest_model = [np.zeros_like(self.models[0].p_list())]
@@ -205,6 +205,7 @@ class GPUWorker(object):
                     self.sorted[i] = former_champ_idx
 
             # Validation data
+            #TODO: Test getting rid of self.sorted vector, see if it actually makes a difference in computational time
             g, ty = self.val_data[0]
             val_pred, bc = self.models[self.sorted[0]](g)
             neg_val = -self.fitness_f(val_pred,ty)
@@ -213,27 +214,37 @@ class GPUWorker(object):
             if self.best_val > neg_val:
                 self.best_val = neg_val
 
-            #print(' Copy models over truncation barrier randomly into bottom models w/ mutation ')
+            ' Find sensitivity of each top model'
+            for i in range(self.trunc_threshold):
+                self.models[self.sorted[i]].sensitivity(self.grad_data)
+
+            ' Copy models over truncation barrier randomly into bottom models w/ mutation, and mutate top models '
             # Generate array of random indices corresponding to models above trunc barrier, and collect mutation arrays
             #rand_model_p = self.models[0].collect_mutations(self.mut,self.num_models,self.device)
             rand_top = np.random.randint(self.trunc_threshold, size=self.num_models - self.trunc_threshold)
             for i in range(self.trunc_threshold,self.num_models):
-                #print(i)
                 # Grab all truncated models
                 m = self.models[self.sorted[i]]
 
                 # Grab random top model
                 m_t = self.models[self.sorted[rand_top[i-self.trunc_threshold]]]
 
-                # for (mp, mtp, mut) in zip(m.parameters(),m_t.parameters(), rand_model_p):
-                    # mp.copy_(mtp).add_(mut[i])
+                #for (mp, mtp, mut) in zip(m.parameters(),m_t.parameters(), rand_model_p):
+                #    mp.copy_(mtp).add_(torch.div(mut[i],sens))
+
+                #self.mut_gen_idx[gen][rand_top[i-self.trunc_threshold]].append(m.p_list())
+
                 for (mp, mtp) in zip(m.parameters(), m_t.parameters()):
                     # Copy top model parameters chosen into bottom module and mutate with random tensor of same size
                     # New random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                     mp.copy_(mtp)
 
-                m = m.mutate(self.mut,self.grad_data,self.safe_mut)
-                #self.mut_gen_idx[gen][rand_top[i-self.trunc_threshold]].append(m.p_list())
+                # Copy sensitvity from top to selected model
+                m.sens = m_t.sens
+
+                # Call mutation
+                m.mutate(self.mut)
+
 
             # print(' Mutate top models that are not champion ')
             for i in range(1,self.trunc_threshold):
@@ -249,9 +260,8 @@ class GPUWorker(object):
                     # Add random tensor vals drawn from normal distn center=0 var=1, multiplied by mutation power
                 #self.mut_gen_idx[gen][i].append(m.p_list())
 
-                m = m.mutate(self.mut,self.grad_data,self.safe_mut)
+                m.mutate(self.mut)
 
-            m = self.models[self.sorted[0]]
             #m_cpu = m.p_list()
             #self.avg_tops[gen] += m_cpu
             #if np.linalg.norm(m_cpu) > np.linalg.norm(self.furthest_model[gen]):
